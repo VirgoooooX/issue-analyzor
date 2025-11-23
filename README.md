@@ -1,6 +1,6 @@
-# Failure Tracker Dashboard
+# Issue Analyzer System
 
-基于Web的Failure Tracker分析和统计Dashboard，支持数据持久化存储、多维度分析、数据可视化、筛选和导出功能。
+基于Web的Issue分析和统计系统，支持数据持久化存储、多维度分析、数据可视化、筛选和导出功能。
 
 ## 技术架构
 
@@ -63,6 +63,15 @@ docker-compose logs -f
 
 # 停止服务
 docker-compose down
+```
+
+### 多架构支持 (AMD64/ARM64)
+
+系统支持在AMD64和ARM64架构上运行，使用Docker Buildx构建多架构镜像：
+
+```bash
+# 构建多架构镜像
+bash docker/build-multi-arch.sh
 ```
 
 访问: http://localhost

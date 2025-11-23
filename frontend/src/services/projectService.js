@@ -36,17 +36,31 @@ export const projectService = {
   },
 
   // Get filter options
-  async getFilterOptions(projectId) {
-    return apiClient.get(`/projects/${projectId}/filter-options`);
+  async getFilterOptions(projectId, currentFilters = {}) {
+    return apiClient.get(`/projects/${projectId}/filter-options`, { params: currentFilters });
   },
 
   // Get analysis results
-  async getAnalysis(projectId) {
-    return apiClient.get(`/projects/${projectId}/analysis`);
+  async getAnalysis(projectId, filters = {}) {
+    return apiClient.get(`/projects/${projectId}/analysis`, { params: filters });
   },
 
   // Get test analysis results
   async getTestAnalysis(projectId, filters = {}) {
     return apiClient.get(`/projects/${projectId}/analysis/test`, { params: filters });
+  },
+
+  // Get cross analysis results
+  async getCrossAnalysis(projectId, dimension1, dimension2, filters = {}) {
+    return apiClient.get(`/projects/${projectId}/analysis/cross`, {
+      params: { dimension1, dimension2, ...filters },
+    });
+  },
+
+  // Get filter statistics for FilterResultsPage
+  async getFilterStatistics(projectId, filters = {}, includeTrend = false) {
+    return apiClient.get(`/projects/${projectId}/filter-statistics`, {
+      params: { ...filters, includeTrend },
+    });
   },
 };

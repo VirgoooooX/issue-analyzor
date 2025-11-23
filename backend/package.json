@@ -1,7 +1,7 @@
 {
-  "name": "failure-tracker-backend",
+  "name": "issue-analyzer-backend",
   "version": "1.0.0",
-  "description": "Failure Tracker Dashboard Backend API",
+  "description": "Issue Analyzer System Backend API",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -9,11 +9,11 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
-    "failure-tracker",
+    "issue-analyzer",
     "dashboard",
     "analytics"
   ],
-  "author": "",
+  "author": "Vigoss",
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
@@ -24,8 +24,5 @@
     "better-sqlite3": "^9.2.2",
     "morgan": "^1.10.0",
     "joi": "^17.11.0"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
   }
 }

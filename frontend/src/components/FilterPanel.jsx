@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Drawer,
-  Collapse,
   Select,
   DatePicker,
   Input,
@@ -21,10 +21,10 @@ import dayjs from 'dayjs';
 import useStore from '../store';
 
 const { RangePicker } = DatePicker;
-const { Panel } = Collapse;
 
 function FilterPanel() {
-  const { filters, filterOptions, projects, setFilter, resetFilters, loadFilterOptions } = useStore();
+  const navigate = useNavigate();
+  const { filters, filterOptions, projects, setFilter, resetFilters, loadFilterOptions, applyFilters } = useStore();
   const [localFilters, setLocalFilters] = useState({});
 
   const currentProject = projects.current;
@@ -37,6 +37,24 @@ function FilterPanel() {
       loadFilterOptions(currentProject.id);
     }
   }, [currentProject?.id]);
+
+  // Reload filter options when local filters change (级联筛选)
+  // 实时更新其他筛选器的选项，但每个筛选器查询时会排除自己的条件
+  useEffect(() => {
+    if (currentProject?.id) {
+      // 只传递有值的筛选条件
+      const activeFilters = {};
+      Object.keys(localFilters).forEach(key => {
+        const value = localFilters[key];
+        if (Array.isArray(value) && value.length > 0) {
+          activeFilters[key] = value;
+        } else if (value && !Array.isArray(value) && value !== '') {
+          activeFilters[key] = value;
+        }
+      });
+      loadFilterOptions(currentProject.id, activeFilters);
+    }
+  }, [localFilters, currentProject?.id]);
 
   // Initialize local filters from store
   useEffect(() => {
@@ -54,7 +72,11 @@ function FilterPanel() {
     Object.keys(localFilters).forEach((key) => {
       setFilter(key, localFilters[key]);
     });
-    // TODO: Trigger data refresh
+    // 跳转到筛选结果页面
+    applyFilters();
+    // Encode filters and navigate to filter results page
+    const filtersEncoded = btoa(JSON.stringify(localFilters));
+    navigate(`/filter-results?filters=${filtersEncoded}&project=${currentProject.id}`);
   };
 
   const handleResetFilters = () => {
@@ -154,9 +176,9 @@ function FilterPanel() {
   return (
     <div style={{ width: '300px', height: '100%', display: 'flex', flexDirection: 'column', borderRight: '1px solid #f0f0f0' }}>
       {/* Header */}
-      <div style={{ padding: '16px', borderBottom: '1px solid #f0f0f0' }}>
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
+      <div style={{ padding: '12px', borderBottom: '1px solid #f0f0f0' }}>
+        <Space direction="vertical" style={{ width: '100%' }} size="small">
+          <div style={{ fontSize: '15px', fontWeight: 'bold' }}>
             <FilterOutlined /> 数据筛选
           </div>
           
@@ -167,6 +189,7 @@ function FilterPanel() {
             value={localFilters.fa_search}
             onChange={(e) => handleFilterChange('fa_search', e.target.value)}
             allowClear
+            size="small"
           />
 
           {/* Active Filter Tags */}
@@ -188,258 +211,264 @@ function FilterPanel() {
       </div>
 
       {/* Filters */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-        <Collapse defaultActiveKey={['basic', 'test']} ghost>
-          {/* Basic Information */}
-          <Panel header="基本信息" key="basic">
-            <Space direction="vertical" style={{ width: '100%' }} size="middle">
-              <div>
-                <div style={{ marginBottom: '8px', fontWeight: 500 }}>Open Date</div>
-                <RangePicker
-                  style={{ width: '100%' }}
-                  value={[
-                    localFilters.date_from ? dayjs(localFilters.date_from) : null,
-                    localFilters.date_to ? dayjs(localFilters.date_to) : null,
-                  ]}
-                  onChange={(dates) => {
-                    handleFilterChange('date_from', dates ? dates[0]?.format('YYYY-MM-DD') : null);
-                    handleFilterChange('date_to', dates ? dates[1]?.format('YYYY-MM-DD') : null);
-                  }}
-                />
-              </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
+        <Space direction="vertical" style={{ width: '100%' }} size="small">
+          {/* Failure Symptom - 最重要 */}
+          <div>
+            <div style={{ marginBottom: '6px', fontWeight: 600, color: '#1890ff', fontSize: '13px' }}>Failure Symptom</div>
+            <Select
+              mode="multiple"
+              showSearch
+              style={{ width: '100%' }}
+              placeholder="选择失败症状"
+              value={localFilters.symptoms}
+              onChange={(value) => handleFilterChange('symptoms', value)}
+              options={options.symptoms.map((s) => ({ label: s, value: s }))}
+              maxTagCount="responsive"
+              filterOption={(input, option) =>
+                option.label.toLowerCase().includes(input.toLowerCase())
+              }
+              size="small"
+            />
+          </div>
 
-              <div>
-                <div style={{ marginBottom: '8px', fontWeight: 500 }}>Priority</div>
-                <Select
-                  mode="multiple"
-                  style={{ width: '100%' }}
-                  placeholder="选择优先级"
-                  value={localFilters.priorities}
-                  onChange={(value) => handleFilterChange('priorities', value)}
-                  options={options.priorities.map((p) => ({ label: p, value: p }))}
-                  maxTagCount="responsive"
-                />
-              </div>
+          {/* Failed Location - 提高优先级 */}
+          <div>
+            <div style={{ marginBottom: '6px', fontWeight: 600, color: '#fa8c16', fontSize: '13px' }}>Failed Location</div>
+            <Select
+              mode="multiple"
+              showSearch
+              style={{ width: '100%' }}
+              placeholder="选择位置"
+              value={localFilters.failed_locations}
+              onChange={(value) => handleFilterChange('failed_locations', value)}
+              options={options.failedLocations.map((l) => ({ label: l, value: l }))}
+              maxTagCount="responsive"
+              filterOption={(input, option) =>
+                option.label.toLowerCase().includes(input.toLowerCase())
+              }
+              size="small"
+            />
+          </div>
 
-              <div>
-                <div style={{ marginBottom: '8px', fontWeight: 500 }}>FA Status</div>
-                <Select
-                  mode="multiple"
-                  style={{ width: '100%' }}
-                  placeholder="选择FA状态"
-                  value={localFilters.fa_statuses}
-                  onChange={(value) => handleFilterChange('fa_statuses', value)}
-                  options={options.faStatuses.map((s) => ({ label: s, value: s }))}
-                  maxTagCount="responsive"
-                />
-              </div>
-            </Space>
-          </Panel>
+          {/* WF */}
+          <div>
+            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>WF</div>
+            <Select
+              mode="multiple"
+              showSearch
+              style={{ width: '100%' }}
+              placeholder="选择WF"
+              value={localFilters.wfs}
+              onChange={(value) => handleFilterChange('wfs', value)}
+              options={options.wfs.map((w) => ({ label: w, value: w }))}
+              maxTagCount="responsive"
+              filterOption={(input, option) =>
+                option.label.toLowerCase().includes(input.toLowerCase())
+              }
+              size="small"
+            />
+          </div>
 
-          {/* Sample Information */}
-          <Panel header="样本信息" key="sample">
-            <Space direction="vertical" style={{ width: '100%' }} size="middle">
-              <div>
-                <div style={{ marginBottom: '8px', fontWeight: 500 }}>Sample Status</div>
-                <Select
-                  mode="multiple"
-                  style={{ width: '100%' }}
-                  placeholder="选择样本状态"
-                  value={localFilters.sample_statuses}
-                  onChange={(value) => handleFilterChange('sample_statuses', value)}
-                  options={options.sampleStatuses.map((s) => ({ label: s, value: s }))}
-                  maxTagCount="responsive"
-                />
-              </div>
+          {/* Failed Test */}
+          <div>
+            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Failed Test</div>
+            <Select
+              mode="multiple"
+              showSearch
+              style={{ width: '100%' }}
+              placeholder="选择测试项"
+              value={localFilters.failed_tests}
+              onChange={(value) => handleFilterChange('failed_tests', value)}
+              options={options.failedTests.map((t) => ({ label: t, value: t }))}
+              maxTagCount="responsive"
+              filterOption={(input, option) =>
+                option.label.toLowerCase().includes(input.toLowerCase())
+              }
+              size="small"
+            />
+          </div>
 
-              <div>
-                <div style={{ marginBottom: '8px', fontWeight: 500 }}>Unit#</div>
-                <Input
-                  placeholder="输入Unit#"
-                  value={localFilters.unit_number}
-                  onChange={(e) => handleFilterChange('unit_number', e.target.value)}
-                  allowClear
-                />
-              </div>
+          {/* Config */}
+          <div>
+            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Config</div>
+            <Select
+              mode="multiple"
+              showSearch
+              style={{ width: '100%' }}
+              placeholder="选择Config"
+              value={localFilters.configs}
+              onChange={(value) => handleFilterChange('configs', value)}
+              options={options.configs.map((c) => ({ label: c, value: c }))}
+              maxTagCount="responsive"
+              filterOption={(input, option) =>
+                option.label.toLowerCase().includes(input.toLowerCase())
+              }
+              size="small"
+            />
+          </div>
 
-              <div>
-                <div style={{ marginBottom: '8px', fontWeight: 500 }}>SN</div>
-                <Input
-                  placeholder="输入SN"
-                  value={localFilters.sn}
-                  onChange={(e) => handleFilterChange('sn', e.target.value)}
-                  allowClear
-                />
-              </div>
-            </Space>
-          </Panel>
+          {/* Priority */}
+          <div>
+            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Priority</div>
+            <Select
+              mode="multiple"
+              style={{ width: '100%' }}
+              placeholder="选择优先级"
+              value={localFilters.priorities}
+              onChange={(value) => handleFilterChange('priorities', value)}
+              options={options.priorities.map((p) => ({ label: p, value: p }))}
+              maxTagCount="responsive"
+              size="small"
+            />
+          </div>
 
-          {/* Test Configuration */}
-          <Panel header="测试配置" key="test">
-            <Space direction="vertical" style={{ width: '100%' }} size="middle">
-              <div>
-                <div style={{ marginBottom: '8px', fontWeight: 500 }}>WF</div>
-                <Select
-                  mode="multiple"
-                  showSearch
-                  style={{ width: '100%' }}
-                  placeholder="选择WF"
-                  value={localFilters.wfs}
-                  onChange={(value) => handleFilterChange('wfs', value)}
-                  options={options.wfs.map((w) => ({ label: w, value: w }))}
-                  maxTagCount="responsive"
-                  filterOption={(input, option) =>
-                    option.label.toLowerCase().includes(input.toLowerCase())
-                  }
-                />
-              </div>
+          {/* FA Status */}
+          <div>
+            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>FA Status</div>
+            <Select
+              mode="multiple"
+              style={{ width: '100%' }}
+              placeholder="选择FA状态"
+              value={localFilters.fa_statuses}
+              onChange={(value) => handleFilterChange('fa_statuses', value)}
+              options={options.faStatuses.map((s) => ({ label: s, value: s }))}
+              maxTagCount="responsive"
+              size="small"
+            />
+          </div>
 
-              <div>
-                <div style={{ marginBottom: '8px', fontWeight: 500 }}>Config</div>
-                <Select
-                  mode="multiple"
-                  showSearch
-                  style={{ width: '100%' }}
-                  placeholder="选择Config"
-                  value={localFilters.configs}
-                  onChange={(value) => handleFilterChange('configs', value)}
-                  options={options.configs.map((c) => ({ label: c, value: c }))}
-                  maxTagCount="responsive"
-                  filterOption={(input, option) =>
-                    option.label.toLowerCase().includes(input.toLowerCase())
-                  }
-                />
-              </div>
+          {/* Open Date */}
+          <div>
+            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Open Date</div>
+            <RangePicker
+              style={{ width: '100%' }}
+              size="small"
+              value={[
+                localFilters.date_from ? dayjs(localFilters.date_from) : null,
+                localFilters.date_to ? dayjs(localFilters.date_to) : null,
+              ]}
+              onChange={(dates) => {
+                handleFilterChange('date_from', dates ? dates[0]?.format('YYYY-MM-DD') : null);
+                handleFilterChange('date_to', dates ? dates[1]?.format('YYYY-MM-DD') : null);
+              }}
+            />
+          </div>
 
-              <div>
-                <div style={{ marginBottom: '8px', fontWeight: 500 }}>Failed Test</div>
-                <Select
-                  mode="multiple"
-                  showSearch
-                  style={{ width: '100%' }}
-                  placeholder="选择测试项"
-                  value={localFilters.failed_tests}
-                  onChange={(value) => handleFilterChange('failed_tests', value)}
-                  options={options.failedTests.map((t) => ({ label: t, value: t }))}
-                  maxTagCount="responsive"
-                  filterOption={(input, option) =>
-                    option.label.toLowerCase().includes(input.toLowerCase())
-                  }
-                />
-              </div>
+          {/* Test ID */}
+          <div>
+            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Test ID</div>
+            <Select
+              mode="multiple"
+              style={{ width: '100%' }}
+              placeholder="选择Test ID"
+              value={localFilters.test_ids}
+              onChange={(value) => handleFilterChange('test_ids', value)}
+              options={options.testIds.map((t) => ({ label: t, value: t }))}
+              maxTagCount="responsive"
+              size="small"
+            />
+          </div>
 
-              <div>
-                <div style={{ marginBottom: '8px', fontWeight: 500 }}>Test ID</div>
-                <Select
-                  mode="multiple"
-                  style={{ width: '100%' }}
-                  placeholder="选择Test ID"
-                  value={localFilters.test_ids}
-                  onChange={(value) => handleFilterChange('test_ids', value)}
-                  options={options.testIds.map((t) => ({ label: t, value: t }))}
-                  maxTagCount="responsive"
-                />
-              </div>
-            </Space>
-          </Panel>
+          {/* Failure Type */}
+          <div>
+            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Failure Type</div>
+            <Select
+              mode="multiple"
+              style={{ width: '100%' }}
+              placeholder="选择类型"
+              value={localFilters.failure_types}
+              onChange={(value) => handleFilterChange('failure_types', value)}
+              options={options.failureTypes.map((t) => ({ label: t, value: t }))}
+              maxTagCount="responsive"
+              size="small"
+            />
+          </div>
 
-          {/* Failure Classification */}
-          <Panel header="失败分类" key="failure">
-            <Space direction="vertical" style={{ width: '100%' }} size="middle">
-              <div>
-                <div style={{ marginBottom: '8px', fontWeight: 500 }}>Failure Type</div>
-                <Select
-                  mode="multiple"
-                  style={{ width: '100%' }}
-                  placeholder="选择类型"
-                  value={localFilters.failure_types}
-                  onChange={(value) => handleFilterChange('failure_types', value)}
-                  options={options.failureTypes.map((t) => ({ label: t, value: t }))}
-                  maxTagCount="responsive"
-                />
-              </div>
+          {/* Function or Cosmetic */}
+          <div>
+            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Function or Cosmetic</div>
+            <Select
+              mode="multiple"
+              style={{ width: '100%' }}
+              placeholder="选择分类"
+              value={localFilters.function_cosmetic}
+              onChange={(value) => handleFilterChange('function_cosmetic', value)}
+              options={options.functionCosmetic.map((f) => ({ label: f, value: f }))}
+              maxTagCount="responsive"
+              size="small"
+            />
+          </div>
 
-              <div>
-                <div style={{ marginBottom: '8px', fontWeight: 500 }}>Function or Cosmetic</div>
-                <Select
-                  mode="multiple"
-                  style={{ width: '100%' }}
-                  placeholder="选择分类"
-                  value={localFilters.function_cosmetic}
-                  onChange={(value) => handleFilterChange('function_cosmetic', value)}
-                  options={options.functionCosmetic.map((f) => ({ label: f, value: f }))}
-                  maxTagCount="responsive"
-                />
-              </div>
+          {/* Sample Status */}
+          <div>
+            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Sample Status</div>
+            <Select
+              mode="multiple"
+              style={{ width: '100%' }}
+              placeholder="选择样本状态"
+              value={localFilters.sample_statuses}
+              onChange={(value) => handleFilterChange('sample_statuses', value)}
+              options={options.sampleStatuses.map((s) => ({ label: s, value: s }))}
+              maxTagCount="responsive"
+              size="small"
+            />
+          </div>
 
-              <div>
-                <div style={{ marginBottom: '8px', fontWeight: 500 }}>Failed Location</div>
-                <Select
-                  mode="multiple"
-                  showSearch
-                  style={{ width: '100%' }}
-                  placeholder="选择位置"
-                  value={localFilters.failed_locations}
-                  onChange={(value) => handleFilterChange('failed_locations', value)}
-                  options={options.failedLocations.map((l) => ({ label: l, value: l }))}
-                  maxTagCount="responsive"
-                  filterOption={(input, option) =>
-                    option.label.toLowerCase().includes(input.toLowerCase())
-                  }
-                />
-              </div>
-            </Space>
-          </Panel>
+          {/* Department */}
+          <div>
+            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Department</div>
+            <Select
+              mode="multiple"
+              style={{ width: '100%' }}
+              placeholder="选择部门"
+              value={localFilters.departments}
+              onChange={(value) => handleFilterChange('departments', value)}
+              options={options.departments.map((d) => ({ label: d, value: d }))}
+              maxTagCount="responsive"
+              size="small"
+            />
+          </div>
 
-          {/* Failure Details */}
-          <Panel header="失败详情" key="details">
-            <Space direction="vertical" style={{ width: '100%' }} size="middle">
-              <div>
-                <div style={{ marginBottom: '8px', fontWeight: 500 }}>Failure Symptom</div>
-                <Select
-                  mode="multiple"
-                  showSearch
-                  style={{ width: '100%' }}
-                  placeholder="选择症状"
-                  value={localFilters.symptoms}
-                  onChange={(value) => handleFilterChange('symptoms', value)}
-                  options={options.symptoms.map((s) => ({ label: s, value: s }))}
-                  maxTagCount="responsive"
-                  filterOption={(input, option) =>
-                    option.label.toLowerCase().includes(input.toLowerCase())
-                  }
-                />
-              </div>
+          {/* Unit# */}
+          <div>
+            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Unit#</div>
+            <Input
+              placeholder="输入Unit#"
+              value={localFilters.unit_number}
+              onChange={(e) => handleFilterChange('unit_number', e.target.value)}
+              allowClear
+              size="small"
+            />
+          </div>
 
-              <div>
-                <div style={{ marginBottom: '8px', fontWeight: 500 }}>Department</div>
-                <Select
-                  mode="multiple"
-                  style={{ width: '100%' }}
-                  placeholder="选择部门"
-                  value={localFilters.departments}
-                  onChange={(value) => handleFilterChange('departments', value)}
-                  options={options.departments.map((d) => ({ label: d, value: d }))}
-                  maxTagCount="responsive"
-                />
-              </div>
-            </Space>
-          </Panel>
-        </Collapse>
+          {/* SN */}
+          <div>
+            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>SN</div>
+            <Input
+              placeholder="输入SN"
+              value={localFilters.sn}
+              onChange={(e) => handleFilterChange('sn', e.target.value)}
+              allowClear
+              size="small"
+            />
+          </div>
+        </Space>
       </div>
 
       {/* Footer Actions */}
-      <div style={{ padding: '16px', borderTop: '1px solid #f0f0f0' }}>
+      <div style={{ padding: '12px', borderTop: '1px solid #f0f0f0' }}>
         <Space style={{ width: '100%' }}>
           <Button
             type="primary"
             icon={<FilterOutlined />}
             onClick={handleApplyFilters}
             style={{ flex: 1 }}
+            size="small"
           >
             应用筛选
           </Button>
-          <Button icon={<ReloadOutlined />} onClick={handleResetFilters}>
+          <Button icon={<ReloadOutlined />} onClick={handleResetFilters} size="small">
             重置
           </Button>
         </Space>

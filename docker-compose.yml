@@ -1,29 +1,17 @@
 version: '3.8'
 
 services:
-  app:
+  issue-analyzer:
+    image: issue-analyzer:latest
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: failure-tracker
     ports:
-      - "3999:80"
+      - "80:80"
     volumes:
-      - data:/app/data
-      - uploads:/app/backend/uploads
+      - ./data:/app/data
+      - ./backend/uploads:/app/backend/uploads
+      - ./backend/logs:/app/backend/logs
     environment:
       - NODE_ENV=production
-      - DATABASE_PATH=/app/data/failure_tracker.db
-      - UPLOAD_DIR=/app/backend/uploads
-      - PORT=3000
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-volumes:
-  data:
-  uploads:

@@ -36,5 +36,7 @@ router.get('/:id/issues', analysisController.getIssues);
 router.get('/:id/filter-options', analysisController.getFilterOptions);
 router.get('/:id/analysis', analysisController.getAnalysis);
 router.get('/:id/analysis/test', analysisController.getTestAnalysis);
+router.get('/:id/analysis/cross', analysisController.getCrossAnalysis);
+router.get('/:id/filter-statistics', analysisController.getFilterStatistics);
 
 module.exports = router;
