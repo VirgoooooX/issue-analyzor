@@ -173,7 +173,8 @@ function AnalysisView({
   const handleChartClick = (dimensionType, dimensionValue) => {
     // Merge new filter with existing filters
     const newFilterValue = Array.isArray(dimensionValue) ? dimensionValue : [dimensionValue];
-    const existingValue = filters[dimensionType] || [];
+    const currentFilters = filters || {};
+    const existingValue = currentFilters[dimensionType] || [];
     
     // Combine values - avoid duplicates
     const combinedValue = Array.isArray(existingValue) 
@@ -182,7 +183,7 @@ function AnalysisView({
     
     // Create merged filters object
     const mergedFilters = {
-      ...filters,
+      ...currentFilters,
       [dimensionType]: combinedValue
     };
     
