@@ -134,6 +134,9 @@ const useStore = create((set, get) => ({
         },
       });
 
+      // 保存到 localStorage
+      localStorage.setItem('currentProjectId', projectId);
+
       // Load analysis for selected project
       get().loadAnalysis(projectId);
     } catch (error) {

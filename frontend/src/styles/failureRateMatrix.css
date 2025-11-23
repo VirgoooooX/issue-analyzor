@@ -1,0 +1,152 @@
+/* 失败率矩阵表格样式 */
+.failure-rate-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 12px;
+}
+
+/* 表头样式 */
+.failure-rate-matrix thead tr th {
+  background: #fafafa;
+  border: 1px solid #d9d9d9;
+  padding: 10px 12px;
+  text-align: center;
+  font-weight: 600;
+  color: #1a1a1a;
+  height: 38px;
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+/* WF 列头 */
+.failure-rate-matrix .wf-header {
+  min-width: 80px;
+  text-align: center;
+  background: #f0f0f0;
+  font-weight: 700;
+  border-right: 3px solid #1890ff;
+  color: #0050b3;
+}
+
+/* Test 列头（Test1、Test2、Test3） */
+.failure-rate-matrix .test-header {
+  background: #e6f7ff;
+  font-weight: 700;
+  min-width: 120px;
+  border-right: 3px solid #1890ff;
+  color: #0050b3;
+  font-size: 13px;
+}
+
+/* Config 列头 */
+.failure-rate-matrix .config-header {
+  background: #fafafa;
+  font-weight: 600;
+  min-width: 90px;
+  color: #595959;
+  border: 1px solid #d9d9d9;
+  font-size: 12px;
+}
+
+/* 数据行样式 */
+.failure-rate-matrix tbody tr {
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.failure-rate-matrix tbody tr:hover {
+  background: #f9f9f9;
+}
+
+/* WF 单元格 */
+.failure-rate-matrix .wf-cell {
+  background: #f0f0f0;
+  font-weight: 700;
+  border-right: 3px solid #1890ff;
+  padding: 10px 12px;
+  text-align: center;
+  min-width: 80px;
+  color: #0050b3;
+  vertical-align: middle;
+  font-size: 13px;
+}
+
+/* Test 名称单元格 */
+.failure-rate-matrix .test-name-cell {
+  border: 1px solid #d9d9d9;
+  padding: 10px 12px;
+  text-align: left;
+  min-width: 150px;
+  background: #f5f9ff;
+  color: #0050b3;
+  font-weight: 600;
+  vertical-align: middle;
+  border-right: 3px solid #1890ff;
+  font-size: 12px;
+}
+
+/* 数据单元格 */
+.failure-rate-matrix .data-cell {
+  border: 1px solid #e8e8e8;
+  padding: 12px 8px;
+  text-align: center;
+  min-width: 90px;
+  height: 48px;
+  vertical-align: middle;
+  background: #fff;
+  color: #595959;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 1.4;
+  transition: all 0.2s ease;
+}
+
+.failure-rate-matrix .data-cell:not(.empty) {
+  cursor: pointer;
+}
+
+.failure-rate-matrix .data-cell:not(.empty):hover {
+  transform: scale(1.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Spec Failure - 淡红色 */
+.failure-rate-matrix .data-cell.spec-failure {
+  background: #fff1f0; /* 淡红 */
+  color: #d9534f;
+}
+
+/* Strife Failure - 淡黄色 */
+.failure-rate-matrix .data-cell.strife-failure {
+  background: #fffbe6; /* 淡黄 */
+  color: #f0ad4e;
+}
+
+/* No Failure - 淡绿色 */
+.failure-rate-matrix .data-cell.no-failure {
+  background: #f1f5e6; /* 淡绿 */
+  color: #5cb85c;
+}
+
+/* 空数据单元格 */
+.failure-rate-matrix .data-cell.empty {
+  background: #fafafa;
+  color: #ccc;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .failure-rate-matrix {
+    font-size: 11px;
+  }
+
+  .failure-rate-matrix thead tr th,
+  .failure-rate-matrix .data-cell,
+  .failure-rate-matrix .test-name-cell {
+    padding: 6px 8px;
+  }
+
+  .failure-rate-matrix .wf-cell {
+    padding: 6px 8px;
+  }
+}

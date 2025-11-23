@@ -143,6 +143,41 @@ async function getFilterStatistics(req, res, next) {
   }
 }
 
+/**
+ * Get sample sizes for a project
+ */
+async function getSampleSizes(req, res, next) {
+  try {
+    const { id } = req.params;
+    const sampleSizes = await analysisModel.getSampleSizes(id);
+
+    res.json({
+      success: true,
+      data: sampleSizes,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Get failure rate matrix data (WF/Test/Config)
+ */
+async function getFailureRateMatrix(req, res, next) {
+  try {
+    const { id } = req.params;
+    const filters = req.query;
+    const matrixData = await analysisModel.getFailureRateMatrix(id, filters);
+
+    res.json({
+      success: true,
+      data: matrixData,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   getIssues,
   getFilterOptions,
@@ -150,4 +185,6 @@ module.exports = {
   getTestAnalysis,
   getCrossAnalysis,
   getFilterStatistics,
+  getSampleSizes,
+  getFailureRateMatrix,
 };

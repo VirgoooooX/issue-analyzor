@@ -919,6 +919,158 @@ class AnalysisModel {
 
     return result;
   }
+
+  /**
+   * 获取失败率矩阵数据：按 WF/Test/Config 维度
+   * 返回结构：{ wfs: [...], tests: [...], configs: [...], matrix: {...} }
+   * matrix 格式：{ "wf-testIndex": { "config": "failureCount/totalSamples" } }
+   */
+  async getFailureRateMatrix(projectId, filters = {}) {
+    const db = getDatabase();
+
+    // 获取所有 issues（支持筛选）
+    const issuesResult = await this.getIssues(projectId, { ...filters, page: 1, limit: 100000 });
+    const issues = issuesResult.issues;
+
+    // 获取 sample sizes（包含 tests 信息）
+    const sampleSizes = await this.getSampleSizes(projectId);
+
+    // 按 WF 排序
+    const sortedSampleSizes = sampleSizes.sort((a, b) => {
+      const numA = parseInt(a.waterfall) || 0;
+      const numB = parseInt(b.waterfall) || 0;
+      return numA - numB;
+    });
+
+    // 收集所有 WFs 和 Tests
+    const wfs = sortedSampleSizes.map(s => s.waterfall);
+    const testsSet = new Set();
+    const testsByWf = {}; // { wf: [{ testId, testName }] }
+
+    sortedSampleSizes.forEach(sample => {
+      testsByWf[sample.waterfall] = sample.tests || [];
+      (sample.tests || []).forEach(test => {
+        testsSet.add(test.testName);
+      });
+    });
+
+    const tests = Array.from(testsSet);
+    const configs = ['R1CASN', 'R2CBCN', 'R3CBCN', 'R4FNSN'];
+
+    // 构建失败数据映射：{ "wf-testName-config": { spec: count, strife: count } }
+    // 打造一个一轃一应表：{ testName: wf }
+    const testToWfMap = {}; // { testName: wf }
+    sortedSampleSizes.forEach(sample => {
+      const tests = sample.tests || [];
+      tests.forEach(testObj => {
+        testToWfMap[testObj.testName] = sample.waterfall;
+      });
+    });
+
+    // 构建失败数据映射：{ "wf-testName-config": { spec: count, strife: count } }
+    // 关键：一个issue只计算一次，不要重复统计
+    const failureMap = {};
+    const processedIssues = new Set(); // 防止重复计算
+    
+    issues.forEach(issue => {
+      if (!issue.failed_test || !issue.config) return;
+      
+      // 创建唯一的issue标识，防止同一个issue被多次统计
+      const issueId = issue.fa_number;
+      if (processedIssues.has(issueId)) return;
+      processedIssues.add(issueId);
+      
+      // 通过 failed_test 查找对应的 WF（该test属于的WF）
+      const wf = testToWfMap[issue.failed_test];
+      if (!wf) {
+        // 如果找不到对应 WF，说明数据不一致，跳过
+        return;
+      }
+      
+      const key = `${issue.wf}-${issue.failed_test}-${issue.config}`;
+      if (!failureMap[key]) {
+        failureMap[key] = { spec: 0, strife: 0 };
+      }
+      
+      // 按失败类型统计
+      const failureType = issue.failure_type ? String(issue.failure_type).trim() : '';
+      if (failureType === 'Spec.' || failureType === 'Spec') {
+        failureMap[key].spec++;
+      } else if (failureType === 'Strife') {
+        failureMap[key].strife++;
+      }
+    });
+    
+    console.log('=== Failure Rate Matrix Debug ===');
+    console.log('Issues count:', issues.length);
+    console.log('Processed issues:', processedIssues.size);
+    console.log('failureMap entries:', Object.keys(failureMap).length);
+    console.log('Sample failureMap entries:', Object.entries(failureMap).slice(0, 3));
+    console.log('testToWfMap:', Object.keys(testToWfMap).length, 'tests mapped');
+    console.log('Sample testToWfMap:', Object.entries(testToWfMap).slice(0, 3));
+
+    // 构建矩阵数据
+    const matrix = {};
+    
+    wfs.forEach(wf => {
+      const wfTests = testsByWf[wf] || [];
+      const sampleSize = sortedSampleSizes.find(s => s.waterfall === wf);
+      const configSamples = sampleSize?.config_samples || {};
+
+      // 为每个 Test 建立映射（按顺序）
+      wfTests.forEach((testObj, testIdx) => {
+        const testName = testObj.testName;
+        const matrixKey = `${wf}-${testIdx}`; // 使用索引作为 key
+        matrix[matrixKey] = {
+          testName,
+          testId: testObj.testId,
+          configs: {}
+        };
+
+        // 为每个 Config 填充数据
+        configs.forEach(config => {
+          const failureKey = `${wf}-${testName}-${config}`;
+          const failureCounts = failureMap[failureKey] || { spec: 0, strife: 0 };
+          const totalSamples = configSamples[config] || 0;
+          
+          // 优先显示 Spec Failure，其次是 Strife
+          const specCount = failureCounts.spec || 0;
+          const strifeCount = failureCounts.strife || 0;
+          
+          if (specCount > 0) {
+            // 有 Spec Failure：显示为 xxF/xxT
+            matrix[matrixKey].configs[config] = {
+              text: `${specCount}F/${totalSamples}T`,
+              type: 'spec',
+            };
+          } else if (strifeCount > 0) {
+            // 仅有 Strife：显示为 xxSF/xxT
+            matrix[matrixKey].configs[config] = {
+              text: `${strifeCount}SF/${totalSamples}T`,
+              type: 'strife',
+            };
+          } else if (totalSamples > 0) {
+            // 没有失败，但有样本：0F/xxT
+            matrix[matrixKey].configs[config] = {
+              text: `0F/${totalSamples}T`,
+              type: 'none',
+            };
+          } else {
+            // 没有任何数据
+            matrix[matrixKey].configs[config] = null;
+          }
+        });
+      });
+    });
+
+    return {
+      wfs,
+      tests: ['Test1', 'Test2', 'Test3'], // 固定 3 个测试分组
+      configs,
+      matrix,
+      testsByWf, // 保留 WF 和 Test 的映射关系
+    };
+  }
 }
 
 module.exports = new AnalysisModel();

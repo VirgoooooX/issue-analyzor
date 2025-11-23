@@ -5,17 +5,24 @@ import zhCN from 'antd/locale/zh_CN';
 import Header from './components/Header';
 import DashboardPage from './pages/DashboardPage';
 import FilterResultsPage from './pages/FilterResultsPage';
+import FailureRateMatrixPage from './pages/FailureRateMatrixPage';
 import useStore from './store';
 
 const { Content } = Layout;
 
 function App() {
-  const { projects, loadProjects, setUploadModalOpen } = useStore();
+  const { projects, loadProjects, setUploadModalOpen, selectProject } = useStore();
   const { list, current, loading } = projects;
 
   useEffect(() => {
-    loadProjects();
-  }, [loadProjects]);
+    loadProjects().then(() => {
+      // 尝试从 localStorage 恢复上次选择的项目
+      const savedProjectId = localStorage.getItem('currentProjectId');
+      if (savedProjectId && !current) {
+        selectProject(parseInt(savedProjectId));
+      }
+    });
+  }, [loadProjects, selectProject]);
 
   return (
     <ConfigProvider locale={zhCN}>
@@ -41,6 +48,7 @@ function App() {
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/filter-results" element={<FilterResultsPage />} />
+                <Route path="/failure-rate-matrix" element={<FailureRateMatrixPage />} />
               </Routes>
             ) : (
               <Empty description="请选择一个项目" style={{ marginTop: '100px' }} />

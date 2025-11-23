@@ -63,4 +63,14 @@ export const projectService = {
       params: { ...filters, includeTrend },
     });
   },
+
+  // Get sample sizes for matrix view
+  async getSampleSizes(projectId) {
+    return apiClient.get(`/projects/${projectId}/sample-sizes`);
+  },
+
+  // Get failure rate matrix data
+  async getFailureRateMatrix(projectId, filters = {}) {
+    return apiClient.get(`/projects/${projectId}/failure-rate-matrix`, { params: filters });
+  },
 };

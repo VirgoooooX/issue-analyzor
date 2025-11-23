@@ -1,17 +1,22 @@
-import { Layout, Select, Button, Upload, Modal, message, Spin } from 'antd';
-import { UploadOutlined, ReloadOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Layout, Select, Button, Upload, Modal, message, Spin, Menu } from 'antd';
+import { UploadOutlined, ReloadOutlined, DeleteOutlined, BarChartOutlined, DashboardOutlined, HomeOutlined } from '@ant-design/icons';
 import { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import useStore from '../store';
 
 const { Header: AntHeader } = Layout;
 
 function Header() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { projects, selectProject, uploadProject, deleteProject, setUploadModalOpen, ui } = useStore();
   const { list, current, loading } = projects;
   const [uploading, setUploading] = useState(false);
 
   const handleProjectChange = (projectId) => {
     selectProject(projectId);
+    // 保存到 localStorage
+    localStorage.setItem('currentProjectId', projectId);
   };
 
   const handleUpload = async (file) => {
@@ -61,60 +66,84 @@ function Header() {
     <AntHeader
       style={{
         background: '#001529',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0 24px',
+        padding: 0,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-        <h1 style={{ color: '#fff', margin: 0, fontSize: '20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '0 24px', height: '64px' }}>
+        <h1 style={{ color: '#fff', margin: 0, fontSize: '20px', marginRight: '32px' }}>
           📊 Failure Tracker Dashboard
         </h1>
 
-        <Select
-          placeholder="选择项目"
-          value={current?.id}
-          onChange={handleProjectChange}
-          loading={loading}
-          style={{ width: 300 }}
-          options={list.map((p) => ({
-            label: `${p.name} (${p.total_issues} issues)`,
-            value: p.id,
-          }))}
-        />
-      </div>
-
-      <div style={{ display: 'flex', gap: '12px' }}>
-        <Button
-          type="default"
-          ghost
-          icon={<UploadOutlined />}
-          onClick={() => setUploadModalOpen(true)}
-        >
-          上传项目
-        </Button>
-
         {current && (
-          <>
-            <Button
-              type="default"
-              ghost
-              icon={<ReloadOutlined />}
-              onClick={() => selectProject(current.id)}
-            >
-              刷新
-            </Button>
-            <Button
-              type="primary"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={handleDelete}
-            >
-              删除
-            </Button>
-          </>
+          <Menu
+            mode="horizontal"
+            selectedKeys={[location.pathname]}
+            onClick={({ key }) => navigate(key)}
+            style={{ 
+              flex: 1, 
+              background: 'transparent',
+              border: 'none',
+              lineHeight: '64px'
+            }}
+            theme="dark"
+            items={[
+              {
+                key: '/dashboard',
+                icon: <DashboardOutlined />,
+                label: '仪表盘',
+              },
+              {
+                key: '/failure-rate-matrix',
+                icon: <BarChartOutlined />,
+                label: '失败率矩阵',
+              },
+            ]}
+          />
         )}
+
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <Select
+            placeholder="选择项目"
+            value={current?.id}
+            onChange={handleProjectChange}
+            loading={loading}
+            style={{ width: 300 }}
+            options={list.map((p) => ({
+              label: `${p.name} (${p.total_issues} issues)`,
+              value: p.id,
+            }))}
+          />
+
+          <Button
+            type="default"
+            ghost
+            icon={<UploadOutlined />}
+            onClick={() => setUploadModalOpen(true)}
+          >
+            上传项目
+          </Button>
+
+          {current && (
+            <>
+              <Button
+                type="default"
+                ghost
+                icon={<ReloadOutlined />}
+                onClick={() => selectProject(current.id)}
+              >
+                刷新
+              </Button>
+              <Button
+                type="primary"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={handleDelete}
+              >
+                删除
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       <Modal
