@@ -2,11 +2,7 @@ version: '3.8'
 
 services:
   issue-analyzer:
-    image: issue-analyzer:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: issue-analyzer
+    image: virgoooox/issue-analyzer:latest
     ports:
       - "80:80"
     volumes:

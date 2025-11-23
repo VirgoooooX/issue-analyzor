@@ -204,19 +204,26 @@ async function deleteProject(req, res, next) {
 
     if (hard === 'true') {
       await projectModel.hardDeleteProject(id);
+      console.log(`🗑️  Hard deleted project ${id}`);
     } else {
       await projectModel.deleteProject(id);
+      console.log(`🗑️  Soft deleted project ${id}`);
     }
+
+    // 强制保存数据库（安全操作）
+    await forceSaveDatabase();
+    console.log(`💾 Database saved after deleting project ${id}`);
 
     // 清除该项目的缓存
     cacheService.clearProjectCache(id);
-    console.log(`🗑️  Project ${id} deleted and cache cleared`);
+    console.log(`💾 Cache cleared for project ${id}`);
 
     res.json({
       success: true,
       message: 'Project deleted successfully',
     });
   } catch (error) {
+    console.error('Error deleting project:', error);
     next(error);
   }
 }

@@ -91,10 +91,22 @@ class ProjectModel {
   async hardDeleteProject(projectId) {
     const db = getDatabase();
 
-    // Foreign key constraints will cascade delete issues, sample_sizes, and analysis_cache
-    const result = db.prepare(`DELETE FROM projects WHERE id = ?`).run(projectId);
+    try {
+      // sql.js doesn't fully support CASCADE DELETE, so we delete manually
+      // Delete related data first (child records)
+      db.prepare(`DELETE FROM issues WHERE project_id = ?`).run(projectId);
+      db.prepare(`DELETE FROM sample_sizes WHERE project_id = ?`).run(projectId);
+      db.prepare(`DELETE FROM analysis_cache WHERE project_id = ?`).run(projectId);
+      
+      // Finally delete the project
+      const result = db.prepare(`DELETE FROM projects WHERE id = ?`).run(projectId);
 
-    return result.changes > 0;
+      console.log(`✅ Hard deleted project ${projectId} and all related data`);
+      return result.changes > 0;
+    } catch (error) {
+      console.error(`❌ Error hard deleting project ${projectId}:`, error);
+      throw error;
+    }
   }
 
   /**

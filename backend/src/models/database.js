@@ -72,6 +72,7 @@ async function saveDatabase() {
 /**
  * 防抖保存数据库 - 延迟保存以减少文件I/O操作
  * @param {number} delay - 延迟时间（毫秒），默认1000ms
+ * @returns {Promise} 返回一个Promise，在延迟后执行保存
  */
 function debouncedSaveDatabase(delay = 1000) {
   pendingSave = true;
@@ -80,11 +81,14 @@ function debouncedSaveDatabase(delay = 1000) {
     clearTimeout(saveTimer);
   }
   
-  saveTimer = setTimeout(async () => {
-    if (pendingSave) {
-      await saveDatabase();
-    }
-  }, delay);
+  return new Promise((resolve) => {
+    saveTimer = setTimeout(async () => {
+      if (pendingSave) {
+        await saveDatabase();
+      }
+      resolve();
+    }, delay);
+  });
 }
 
 /**
