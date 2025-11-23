@@ -1,4 +1,7 @@
 # Multi-stage build for Issue Analyzer System
+# Supports multiple architectures: amd64, arm64, arm/v7, etc.
+# Build command: docker buildx build --platform linux/amd64,linux/arm64 -t issue-analyzer:latest .
+
 # Stage 1: Build frontend
 FROM node:18-alpine AS frontend-builder
 
@@ -25,6 +28,8 @@ FROM node:18-alpine AS backend-builder
 WORKDIR /app/backend
 
 # Install build dependencies for native modules (canvas requires these)
+# Note: Different packages may be needed for different architectures
+# For ARM64/ARM: ensure gcc, g++, make, and cairo dependencies are available
 RUN apk add --no-cache python3 make g++ cairo-dev jpeg-dev pango-dev giflib-dev
 
 # Copy backend package files
@@ -85,3 +90,21 @@ EXPOSE 80
 
 # Start services
 CMD ["/start.sh"]
+
+# ============================================
+# 多架构构建说明
+# ============================================
+# 
+# 1. 使用 Docker Buildx 构建多架构镜像（推荐）：
+#    docker buildx build --platform linux/amd64,linux/arm64 -t issue-analyzer:latest .
+#
+# 2. 构建并推送到 Docker Hub：
+#    docker buildx build --platform linux/amd64,linux/arm64 \
+#      -t your-registry/issue-analyzer:latest --push .
+#
+# 3. 使用脚本构建多架构：
+#    bash docker/build-multi-arch.sh
+#
+# 4. 验证镜像支持的架构：
+#    docker buildx inspect --bootstrap
+#
