@@ -94,20 +94,20 @@ async function startServer() {
       console.log('========================================');
     });
   } catch (error) {
-    console.error('‚ùå Failed to start server:', error);
+    console.error('‚ù?Failed to start server:', error);
     process.exit(1);
   }
 }
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('\n‚è≥ Shutting down gracefully...');
+  console.log('\n‚è?Shutting down gracefully...');
   await closeDatabase();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.log('\n‚è≥ Shutting down gracefully...');
+  console.log('\n‚è?Shutting down gracefully...');
   await closeDatabase();
   process.exit(0);
 });

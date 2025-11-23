@@ -1,23 +1,29 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Card, Select, Radio, Spin } from 'antd';
+import { Card, Select, Radio, Spin, Space, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import * as echarts from 'echarts';
 import useStore from '../store';
 
 const { Option } = Select;
+const { Text } = Typography;
 
 // 统一的字体样式配置（与Dashboard保持一致）
 const FONT_STYLES = {
   chartTitle: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '600',
     color: '#262626',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
   },
   chartLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'normal',
     color: '#595959',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+  },
+  axisLabel: {
+    fontSize: 11,
+    color: '#8c8c8c',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
   }
 };
@@ -40,17 +46,23 @@ const CrossAnalysisHeatmap = ({ projectId, filters: propFilters }) => {
         currentFilters
       );
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, crossAnalysis.dimension1, crossAnalysis.dimension2, currentFilters]);
 
   useEffect(() => {
     if (crossAnalysis.data) {
-      renderHeatmap();
+      try {
+        renderHeatmap();
+      } catch (error) {
+        console.error('Error rendering heatmap:', error);
+      }
     }
     return () => {
       if (chartRef.current) {
         echarts.getInstanceByDom(chartRef.current)?.dispose();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [crossAnalysis.data, displayMode]);
 
   const handleDimensionChange = (value, type) => {
@@ -85,65 +97,137 @@ const CrossAnalysisHeatmap = ({ projectId, filters: propFilters }) => {
       heatmapData.push([x, y, item.totalCount, displayValue, item]);
     });
 
+    // 计算最大值，用于颜色映射
+    const maxValue = Math.max(...matrix.map(item => item.totalCount), 1);
+
+    // 根据显示模式选择颜色方案
+    const colorSchemes = {
+      spec: ['#f0f9ff', '#bae7ff', '#69c0ff', '#40a9ff', '#1890ff', '#096dd9'],
+      strife: ['#fff7e6', '#ffe7ba', '#ffd666', '#ffc53d', '#faad14', '#d48806'],
+      total: ['#f0f9ff', '#bae7ff', '#91d5ff', '#69c0ff', '#40a9ff', '#1890ff']
+    };
+
+    // 动态计算图表高度
+    const chartHeight = Math.max(400, dimension1Values.length * 35 + 150);
+
     const option = {
       title: {
-        text: `交叉分析：${crossAnalysis.dimension1} × ${crossAnalysis.dimension2}`,
+        text: `交叉分析: ${getDimensionLabel(crossAnalysis.dimension1)} × ${getDimensionLabel(crossAnalysis.dimension2)}`,
         left: 'center',
+        top: 15,
         ...FONT_STYLES.chartTitle
       },
       tooltip: {
         position: 'top',
-        textStyle: FONT_STYLES.chartLabel,
+        backgroundColor: 'rgba(255, 255, 255, 0.96)',
+        borderColor: '#e8e8e8',
+        borderWidth: 1,
+        padding: [12, 16],
+        textStyle: {
+          ...FONT_STYLES.chartLabel,
+          fontSize: 13,
+          lineHeight: 20
+        },
         formatter: (params) => {
           const data = params.data[4];
+          const specPercent = data.totalCount > 0 ? Math.round((data.specCount/data.totalCount)*100) : 0;
+          const strifePercent = data.totalCount > 0 ? Math.round((data.strifeCount/data.totalCount)*100) : 0;
           return `
-            ${crossAnalysis.dimension1}: ${data.dimension1Value}<br/>
-            ${crossAnalysis.dimension2}: ${data.dimension2Value}<br/>
-            总失败: ${data.totalFailureRate} (共${data.totalCount}次)<br/>
-            Spec.失败: ${data.specFailureRate} (占总失败${Math.round((data.specCount/data.totalCount)*100)}%)<br/>
-            Strife失败: ${data.strifeFailureRate} (占总失败${Math.round((data.strifeCount/data.totalCount)*100)}%)<br/>
-            占比: ${data.percentage}%
+            <div style="line-height: 1.8;">
+              <div style="font-weight: 600; margin-bottom: 10px; color: #262626; font-size: 14px;">
+                <div>${getDimensionLabel(crossAnalysis.dimension1)}: <span style="color: #1890ff;">${data.dimension1Value}</span></div>
+                <div>${getDimensionLabel(crossAnalysis.dimension2)}: <span style="color: #1890ff;">${data.dimension2Value}</span></div>
+              </div>
+              <div style="border-top: 1px solid #f0f0f0; padding-top: 10px; margin-top: 8px;">
+                <div style="margin-bottom: 6px;"><strong style="color: #262626;">总失败:</strong> <span style="color: #f5222d; font-size: 15px; font-weight: 600;">${data.totalFailureRate}</span> <span style="color: #8c8c8c;">(共${data.totalCount}次)</span></div>
+                <div style="margin-bottom: 4px;"><strong style="color: #262626;">Spec.失败:</strong> <span style="color: #1890ff; font-weight: 500;">${data.specFailureRate}</span> <span style="color: #8c8c8c;">(${specPercent}%)</span></div>
+                <div style="margin-bottom: 4px;"><strong style="color: #262626;">Strife失败:</strong> <span style="color: #faad14; font-weight: 500;">${data.strifeFailureRate}</span> <span style="color: #8c8c8c;">(${strifePercent}%)</span></div>
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #f0f0f0;"><strong style="color: #262626;">占总体比:</strong> <span style="color: #52c41a; font-weight: 600; font-size: 14px;">${data.percentage}%</span></div>
+              </div>
+            </div>
           `;
         },
       },
       grid: {
-        left: '8%',
-        right: '8%',
-        top: '12%',
-        bottom: '12%',
+        left: 200,
+        right: 50,
+        top: 70,
+        bottom: 80,
+        containLabel: false
       },
       xAxis: {
         type: 'category',
         data: dimension2Values,
+        position: 'bottom',
         splitArea: {
           show: true,
+          areaStyle: {
+            color: ['#fafafa', '#ffffff']
+          }
+        },
+        axisLine: {
+          show: true,
+          lineStyle: {
+            color: '#e8e8e8',
+            width: 1
+          }
+        },
+        axisTick: {
+          show: false
         },
         axisLabel: {
-          rotate: 45,
+          rotate: 0,
           interval: 0,
-          ...FONT_STYLES.chartLabel
+          fontSize: 12,
+          color: '#595959',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto',
+          margin: 15,
+          overflow: 'truncate',
+          width: 80,
+          formatter: (value) => {
+            return value.length > 8 ? value.substring(0, 7) + '...' : value;
+          }
         },
       },
       yAxis: {
         type: 'category',
         data: dimension1Values,
+        position: 'left',
         splitArea: {
           show: true,
+          areaStyle: {
+            color: ['#fafafa', '#ffffff']
+          }
         },
-        axisLabel: FONT_STYLES.chartLabel,
+        axisLine: {
+          show: true,
+          lineStyle: {
+            color: '#e8e8e8',
+            width: 1
+          }
+        },
+        axisTick: {
+          show: false
+        },
+        axisLabel: {
+          fontSize: 12,
+          color: '#595959',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto',
+          margin: 15,
+          overflow: 'truncate',
+          width: 170,
+          formatter: (value) => {
+            return value.length > 25 ? value.substring(0, 24) + '...' : value;
+          }
+        },
       },
       visualMap: {
+        show: false,
         min: 0,
-        max: Math.max(...matrix.map(item => item.totalCount)),
-        calculable: true,
-        orient: 'horizontal',
-        left: 'center',
-        bottom: '0%',
-        itemHeight: 100,
-        textStyle: FONT_STYLES.chartLabel,
+        max: maxValue,
         inRange: {
-          color: ['#e0f7fa', '#00bcd4', '#0097a7', '#d32f2f'],
-        },
+          color: colorSchemes[displayMode]
+        }
       },
       series: [
         {
@@ -152,20 +236,36 @@ const CrossAnalysisHeatmap = ({ projectId, filters: propFilters }) => {
           data: heatmapData,
           label: {
             show: true,
-            fontSize: 10,
-            formatter: (params) => params.data[3],
+            fontSize: 13,
+            fontWeight: '600',
+            color: '#262626',
+            formatter: (params) => {
+              const value = params.data[3];
+              return value || '';
+            },
           },
           emphasis: {
             itemStyle: {
-              shadowBlur: 10,
-              shadowColor: 'rgba(0, 0, 0, 0.5)',
+              shadowBlur: 20,
+              shadowColor: 'rgba(24, 144, 255, 0.5)',
+              borderColor: '#1890ff',
+              borderWidth: 3
             },
+            label: {
+              fontSize: 14,
+              fontWeight: '700'
+            }
           },
+          itemStyle: {
+            borderColor: '#fff',
+            borderWidth: 3,
+            borderRadius: 4
+          }
         },
       ],
     };
 
-    chart.setOption(option);
+    chart.setOption(option, true);
 
     // Handle click event for drill-down
     chart.on('click', (params) => {
@@ -197,6 +297,7 @@ const CrossAnalysisHeatmap = ({ projectId, filters: propFilters }) => {
     });
   };
 
+  // 维度选项配置
   const dimensionOptions = [
     { label: 'Symptom', value: 'symptom' },
     { label: 'Config', value: 'config' },
@@ -205,17 +306,37 @@ const CrossAnalysisHeatmap = ({ projectId, filters: propFilters }) => {
     { label: 'Test ID', value: 'test_id' },
   ];
 
+  // 获取维度标签
+  const getDimensionLabel = (value) => {
+    const option = dimensionOptions.find(opt => opt.value === value);
+    return option ? option.label : value;
+  };
+
   return (
     <Card
-      title="交叉分析热力图"
+      title={
+        <Space size="middle">
+          <span style={{
+            fontSize: '16px',
+            fontWeight: '600',
+            color: '#262626'
+          }}>
+            交叉分析热力图
+          </span>
+        </Space>
+      }
+      bordered={false}
+      style={{
+        boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02)'
+      }}
       extra={
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <div>
-            <span style={{ marginRight: '4px', fontSize: '12px' }}>维度1:</span>
+        <Space size="middle" wrap>
+          <Space size="small">
+            <Text type="secondary" style={{ fontSize: '13px' }}>维度1:</Text>
             <Select
-              size="small"
+              size="middle"
               value={crossAnalysis.dimension1}
-              style={{ width: 100 }}
+              style={{ width: 110 }}
               onChange={(value) => handleDimensionChange(value, 'dimension1')}
             >
               {dimensionOptions
@@ -226,13 +347,13 @@ const CrossAnalysisHeatmap = ({ projectId, filters: propFilters }) => {
                   </Option>
                 ))}
             </Select>
-          </div>
-          <div>
-            <span style={{ marginRight: '4px', fontSize: '12px' }}>维度2:</span>
+          </Space>
+          <Space size="small">
+            <Text type="secondary" style={{ fontSize: '13px' }}>维度2:</Text>
             <Select
-              size="small"
+              size="middle"
               value={crossAnalysis.dimension2}
-              style={{ width: 100 }}
+              style={{ width: 110 }}
               onChange={(value) => handleDimensionChange(value, 'dimension2')}
             >
               {dimensionOptions
@@ -243,19 +364,39 @@ const CrossAnalysisHeatmap = ({ projectId, filters: propFilters }) => {
                   </Option>
                 ))}
             </Select>
-          </div>
-          <Radio.Group size="small" value={displayMode} onChange={(e) => setDisplayMode(e.target.value)}>
+          </Space>
+          <Radio.Group 
+            size="middle" 
+            value={displayMode} 
+            onChange={(e) => setDisplayMode(e.target.value)}
+            buttonStyle="solid"
+          >
             <Radio.Button value="spec">Spec.失败率</Radio.Button>
             <Radio.Button value="strife">Strife失败率</Radio.Button>
             <Radio.Button value="total">总失败率</Radio.Button>
           </Radio.Group>
-        </div>
+        </Space>
       }
     >
       {crossAnalysis.loading ? (
-        <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          minHeight: '500px' 
+        }}>
+          <Spin size="large" tip="加载中..." />
+        </div>
       ) : (
-        <div ref={chartRef} style={{ width: '100%', height: '400px' }} />
+        <div 
+          ref={chartRef} 
+          style={{ 
+            width: '100%', 
+            height: `${Math.max(500, (crossAnalysis.data?.dimension1Values?.length || 10) * 35 + 150)}px`,
+            minHeight: '500px',
+            padding: '10px 0'
+          }} 
+        />
       )}
     </Card>
   );

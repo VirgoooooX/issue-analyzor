@@ -125,33 +125,30 @@ class ProjectModel {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
 
-    const insertMany = db.transaction((issues) => {
-      for (const issue of issues) {
-        stmt.run(
-          projectId,
-          issue.faNumber,
-          issue.openDate,
-          issue.wf,
-          issue.config,
-          issue.symptom,
-          issue.failedTest,
-          issue.testId,
-          issue.priority,
-          issue.failureType,
-          issue.rootCause,
-          issue.faStatus,
-          issue.department,
-          issue.owner,
-          issue.sampleStatus,
-          issue.failedLocation,
-          issue.functionOrCosmetic,
-          issue.multiComponent,
-          issue.rawData
-        );
-      }
-    });
-
-    insertMany(issues);
+    // sql.js doesn't support transactions, so we insert directly
+    for (const issue of issues) {
+      stmt.run(
+        projectId,
+        issue.faNumber,
+        issue.openDate,
+        issue.wf,
+        issue.config,
+        issue.symptom,
+        issue.failedTest,
+        issue.testId,
+        issue.priority,
+        issue.failureType,
+        issue.rootCause,
+        issue.faStatus,
+        issue.department,
+        issue.owner,
+        issue.sampleStatus,
+        issue.failedLocation,
+        issue.functionOrCosmetic,
+        issue.multiComponent,
+        issue.rawData
+      );
+    }
   }
 
   /**
@@ -165,13 +162,10 @@ class ProjectModel {
        VALUES (?, ?, ?, ?, ?)`
     );
 
-    const insertMany = db.transaction((sampleSizes) => {
-      for (const sample of sampleSizes) {
-        stmt.run(projectId, sample.waterfall, sample.testName, sample.tests, sample.configSamples);
-      }
-    });
-
-    insertMany(sampleSizes);
+    // sql.js doesn't support transactions, so we insert directly
+    for (const sample of sampleSizes) {
+      stmt.run(projectId, sample.waterfall, sample.testName, sample.tests, sample.configSamples);
+    }
   }
 }
 

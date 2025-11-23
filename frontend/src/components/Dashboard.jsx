@@ -1,10 +1,15 @@
 import { Row, Col, Card, Statistic, Spin, Alert, Table } from 'antd';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import dayjs from 'dayjs';
 import {
   BugOutlined,
   ExperimentOutlined,
   SettingOutlined,
   WarningOutlined,
+  CalendarOutlined,
 } from '@ant-design/icons';
+import useStore from '../store';
 import ReactECharts from 'echarts-for-react';
 import CrossAnalysisHeatmap from './CrossAnalysisHeatmap';
 
@@ -12,50 +17,52 @@ import CrossAnalysisHeatmap from './CrossAnalysisHeatmap';
 const FONT_STYLES = {
   // ... existing code ...
   chartTitle: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
     color: '#262626',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
   },
   chartLabel: {
-    fontSize: 11,
-    fontWeight: 'normal',
+    fontSize: 12,
+    fontWeight: '500',
     color: '#595959',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
   },
   chartValue: {
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     color: '#262626',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
   },
   legend: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#595959',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
   },
   cardTitle: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#262626'
-  },
-  tableHeader: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#262626'
-  },
-  tableBody: {
-    fontSize: 12,
-    color: '#595959'
-  },
-  statisticValue: {
-    fontSize: 24,
+    fontSize: 16,
     fontWeight: '600',
     color: '#262626'
   },
-  statisticTitle: {
+  tableHeader: {
     fontSize: 13,
-    color: '#8c8c8c'
+    fontWeight: '600',
+    color: '#262626'
+  },
+  tableBody: {
+    fontSize: 13,
+    color: '#595959'
+  },
+  statisticValue: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#262626',
+    lineHeight: 1.2
+  },
+  statisticTitle: {
+    fontSize: 14,
+    color: '#8c8c8c',
+    fontWeight: '500'
   }
 };
 
@@ -89,6 +96,112 @@ function AnalysisView({
   error = null,
   showProjectInfo = false
 }) {
+  const navigate = useNavigate();
+  const { setFilter, applyFilters, projects } = useStore();
+  const [todayStats, setTodayStats] = useState(null);
+  const [todayLoading, setTodayLoading] = useState(true);
+
+  // Load today's statistics
+  React.useEffect(() => {
+    const loadTodayStats = async () => {
+      if (!projectId) return;
+      
+      try {
+        setTodayLoading(true);
+        const today = dayjs().format('YYYY-MM-DD');
+        
+        // Use the analysis service to get today's stats
+        const response = await fetch(
+          `/api/analysis/filter-statistics/${projectId}?date_from=${today}&date_to=${today}`
+        );
+        const result = await response.json();
+        
+        if (result.success && result.data?.statistics) {
+          const stats = result.data.statistics;
+          setTodayStats({
+            totalCount: stats.totalCount,
+            specCount: stats.specCount,
+            strifeCount: stats.strifeCount
+          });
+        } else {
+          setTodayStats({
+            totalCount: 0,
+            specCount: 0,
+            strifeCount: 0
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load today stats:', error);
+        setTodayStats({
+          totalCount: 0,
+          specCount: 0,
+          strifeCount: 0
+        });
+      } finally {
+        setTodayLoading(false);
+      }
+    };
+    
+    loadTodayStats();
+  }, [projectId]);
+
+  const handleTodayClick = async () => {
+    const today = dayjs().format('YYYY-MM-DD');
+    
+    // Merge date filters with existing filters
+    const mergedFilters = {
+      ...filters,
+      date_from: today,
+      date_to: today
+    };
+    
+    // Set merged filters
+    Object.keys(mergedFilters).forEach((key) => {
+      setFilter(key, mergedFilters[key]);
+    });
+    
+    // Small delay to ensure state is updated
+    setTimeout(() => {
+      applyFilters();
+      // Navigate to filter results page
+      const filtersEncoded = btoa(JSON.stringify(mergedFilters));
+      navigate(`/filter-results?filters=${filtersEncoded}&project=${projectId}`);
+    }, 100);
+  };
+
+  // Handle chart click events - merge with existing filters
+  const handleChartClick = (dimensionType, dimensionValue) => {
+    // Merge new filter with existing filters
+    const newFilterValue = Array.isArray(dimensionValue) ? dimensionValue : [dimensionValue];
+    const existingValue = filters[dimensionType] || [];
+    
+    // Combine values - avoid duplicates
+    const combinedValue = Array.isArray(existingValue) 
+      ? [...new Set([...existingValue, ...newFilterValue])]
+      : newFilterValue;
+    
+    // Create merged filters object
+    const mergedFilters = {
+      ...filters,
+      [dimensionType]: combinedValue
+    };
+    
+    // Update store with merged filters
+    Object.keys(mergedFilters).forEach((key) => {
+      setFilter(key, mergedFilters[key]);
+    });
+    
+    setTimeout(() => {
+      applyFilters();
+      const filtersEncoded = btoa(JSON.stringify(mergedFilters));
+      navigate(`/filter-results?filters=${filtersEncoded}&project=${projectId}`);
+    }, 100);
+  };
+
+  // Handle table row click events
+  const handleTableRowClick = (dimensionType, dimensionValue) => {
+    handleChartClick(dimensionType, dimensionValue);
+  };
 
   if (loading) {
     return (
@@ -214,6 +327,7 @@ function AnalysisView({
         z: 0
       },
     ],
+    // ... existing code ...
   } : null;
 
   // Symptom chart options
@@ -519,86 +633,225 @@ function AnalysisView({
 
   return (
     <div>
-      {/* Overview Statistics */}
-      <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="总 Issues数"
-              value={statistics.totalCount}
-              prefix={<BugOutlined />}
-              suffix={
-                <span style={{ ...FONT_STYLES.tableBody, color: '#999', fontSize: '14px' }}>
-                  (
-                  <span style={{ 
-                    backgroundColor: 'rgba(255, 107, 107, 0.15)', 
-                    padding: '2px 6px', 
-                    borderRadius: '3px',
-                    color: '#ff6b6b',
-                    fontWeight: '500'
-                  }}>
-                    {statistics.specCount}F
-                  </span>
-                  {' + '}
-                  <span style={{ 
-                    backgroundColor: 'rgba(255, 193, 7, 0.15)', 
-                    padding: '2px 6px', 
-                    borderRadius: '3px',
-                    color: '#ffc107',
-                    fontWeight: '500'
-                  }}>
-                    {statistics.strifeCount}SF
-                  </span>
-                  )
-                </span>
+      {/* Overview Statistics - Including Today's Issues */}
+      <Row gutter={[16, 16]} style={{ marginBottom: '24px', width: '100%' }}>
+        {/* Today's Issues Mini Card */}
+        <Col flex="1 1 20%">
+          <Card 
+            bordered={false}
+            style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              boxShadow: '0 2px 8px rgba(102, 126, 234, 0.2)',
+              borderRadius: '8px',
+              height: '140px',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              opacity: todayLoading ? 0.7 : 1,
+              position: 'relative',
+              padding: '16px'
+            }}
+            bodyStyle={{ padding: 0, height: '100%' }}
+            onClick={handleTodayClick}
+            onMouseEnter={(e) => {
+              if (!todayLoading) {
+                e.currentTarget.style.boxShadow = '0 4px 16px rgba(102, 126, 234, 0.3)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
               }
-              valueStyle={FONT_STYLES.statisticValue}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="唯一 Symptoms"
-              value={statistics.uniqueSymptoms || (symptomStats ? symptomStats.length : 0)}
-              prefix={<WarningOutlined />}
-              valueStyle={FONT_STYLES.statisticValue}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="测试WF数"
-              value={statistics.uniqueWFs}
-              prefix={<ExperimentOutlined />}
-              valueStyle={FONT_STYLES.statisticValue}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic
-              title="Spec.失败率"
-              value={`${statistics.specCount}F/${statistics.totalSampleSize}T`}
-              prefix={<SettingOutlined />}
-              suffix={
-                <div style={{ ...FONT_STYLES.tableBody, color: '#999', marginTop: '4px', fontSize: '12px' }}>
-                  Strife: 
-                  <span style={{ 
-                    backgroundColor: 'rgba(255, 193, 7, 0.15)', 
-                    padding: '2px 6px', 
-                    borderRadius: '3px',
-                    color: '#ffc107',
-                    fontWeight: '500'
-                  }}>
-                    {statistics.strifeCount}SF
-                  </span>
-                  /{statistics.totalSampleSize}T
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.2)';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+          >
+            {todayLoading ? (
+              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                <Spin size="small" style={{ color: '#fff' }} />
+              </div>
+            ) : (
+              <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', color: '#fff' }}>
+                <div style={{
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  opacity: 0.95,
+                  letterSpacing: '0.5px'
+                }}>
+                  <CalendarOutlined style={{ marginRight: '4px', fontSize: '13px' }} />
+                  今日
                 </div>
-              }
-              valueStyle={{ ...FONT_STYLES.statisticValue, color: '#ff6b6b' }}
-            />
+                <div style={{ textAlign: 'center', fontSize: '48px', fontWeight: '700', lineHeight: '1' }}>
+                  {todayStats?.totalCount || 0}
+                </div>
+                <div style={{ 
+                  fontSize: '11px', 
+                  opacity: 0.85,
+                  background: 'rgba(255,255,255,0.1)',
+                  padding: '4px 8px',
+                  borderRadius: '3px',
+                  alignSelf: 'flex-end'
+                }}>
+                  F:{todayStats?.specCount || 0} SF:{todayStats?.strifeCount || 0}
+                </div>
+              </div>
+            )}
+          </Card>
+        </Col>
+        {/* Total Issues Card */}
+        <Col flex="1 1 20%">
+          <Card 
+            bordered={false}
+            style={{
+              background: '#fff',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+              borderRadius: '8px',
+              height: '140px',
+              position: 'relative',
+              padding: '16px'
+            }}
+            bodyStyle={{ padding: 0, height: '100%' }}
+          >
+            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div style={{ 
+                fontSize: '12px', 
+                color: '#8c8c8c', 
+                fontWeight: '500',
+                letterSpacing: '0.5px'
+              }}>
+                <BugOutlined style={{ marginRight: '6px', color: '#1890ff', fontSize: '13px' }} />
+                总Issues数
+              </div>
+              <div style={{ textAlign: 'center', fontSize: '48px', fontWeight: '700', color: '#1890ff', lineHeight: '1' }}>
+                {statistics.totalCount}
+              </div>
+              <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                <span style={{ 
+                  background: '#fff1f0', 
+                  padding: '4px 6px', 
+                  borderRadius: '3px',
+                  color: '#ff4d4f',
+                  fontWeight: '600',
+                  fontSize: '10px'
+                }}>
+                  {statistics.specCount}F
+                </span>
+                <span style={{ 
+                  background: '#fffbe6', 
+                  padding: '4px 6px', 
+                  borderRadius: '3px',
+                  color: '#faad14',
+                  fontWeight: '600',
+                  fontSize: '10px'
+                }}>
+                  {statistics.strifeCount}SF
+                </span>
+              </div>
+            </div>
+          </Card>
+        </Col>
+        <Col flex="1 1 20%">
+          <Card 
+            bordered={false}
+            style={{
+              background: '#fff',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+              borderRadius: '8px',
+              height: '140px',
+              position: 'relative',
+              padding: '16px'
+            }}
+            bodyStyle={{ padding: 0, height: '100%' }}
+          >
+            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div style={{ 
+                fontSize: '12px', 
+                color: '#8c8c8c', 
+                fontWeight: '500',
+                letterSpacing: '0.5px'
+              }}>
+                <WarningOutlined style={{ marginRight: '6px', color: '#faad14', fontSize: '13px' }} />
+                症状数
+              </div>
+              <div style={{ textAlign: 'center', fontSize: '54px', fontWeight: '700', color: '#faad14', lineHeight: '1' }}>
+                {statistics.uniqueSymptoms || (symptomStats ? symptomStats.length : 0)}
+              </div>
+              <div style={{ height: '22px' }}></div>
+            </div>
+          </Card>
+        </Col>
+        <Col flex="1 1 20%">
+          <Card 
+            bordered={false}
+            style={{
+              background: '#fff',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+              borderRadius: '8px',
+              height: '140px',
+              position: 'relative',
+              padding: '16px'
+            }}
+            bodyStyle={{ padding: 0, height: '100%' }}
+          >
+            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div style={{ 
+                fontSize: '12px', 
+                color: '#8c8c8c', 
+                fontWeight: '500',
+                letterSpacing: '0.5px'
+              }}>
+                <ExperimentOutlined style={{ marginRight: '6px', color: '#52c41a', fontSize: '13px' }} />
+                WF数
+              </div>
+              <div style={{ textAlign: 'center', fontSize: '54px', fontWeight: '700', color: '#52c41a', lineHeight: '1' }}>
+                {statistics.uniqueWFs}
+              </div>
+              <div style={{ height: '22px' }}></div>
+            </div>
+          </Card>
+        </Col>
+        <Col flex="1 1 20%">
+          <Card 
+            bordered={false}
+            style={{
+              background: '#fff',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+              borderRadius: '8px',
+              height: '140px',
+              position: 'relative',
+              padding: '16px'
+            }}
+            bodyStyle={{ padding: 0, height: '100%' }}
+          >
+            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div style={{ 
+                fontSize: '12px', 
+                color: '#8c8c8c', 
+                fontWeight: '500',
+                letterSpacing: '0.5px'
+              }}>
+                <SettingOutlined style={{ marginRight: '6px', color: '#ff4d4f', fontSize: '13px' }} />
+                失败率
+              </div>
+              <div style={{ textAlign: 'center', fontSize: '48px', fontWeight: '700', color: '#ff4d4f', lineHeight: '1' }}>
+                {statistics.specCount}F
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-end', fontSize: '10px' }}>
+                <span style={{ 
+                  color: '#8c8c8c',
+                  fontWeight: '500'
+                }}>
+                  /{statistics.totalSampleSize}T
+                </span>
+                <span style={{ 
+                  background: '#fffbe6', 
+                  padding: '3px 6px', 
+                  borderRadius: '3px',
+                  color: '#faad14',
+                  fontWeight: '600',
+                  whiteSpace: 'nowrap'
+                }}>
+                  Strife {statistics.strifeCount}SF
+                </span>
+              </div>
+            </div>
           </Card>
         </Col>
       </Row>
@@ -606,27 +859,111 @@ function AnalysisView({
           {/* Charts */}
           <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
             <Col span={8}>
-              <Card>
+              <Card 
+                bordered={false}
+                style={{
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                  borderRadius: '8px'
+                }}
+              >
                 {symptomChartOptions ? (
-                  <ReactECharts option={symptomChartOptions} style={{ height: '400px' }} />
+                  <ReactECharts 
+                    option={{
+                      ...symptomChartOptions,
+                      series: symptomChartOptions?.series?.map(s => ({
+                        ...s,
+                        itemStyle: {
+                          ...s.itemStyle,
+                          cursor: 'pointer'
+                        }
+                      }))
+                    }}
+                    style={{ height: '420px' }}
+                    onEvents={{
+                      click: (params) => {
+                        if (params.componentType === 'series') {
+                          const symptom = symptomStats.slice(0, 10).reverse()[params.dataIndex]?.symptom;
+                          if (symptom) {
+                            handleChartClick('symptoms', symptom);
+                          }
+                        }
+                      }
+                    }}
+                  />
                 ) : (
-                  <div style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ height: '420px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <span style={{ color: '#999' }}>暂无数据</span>
                   </div>
                 )}
               </Card>
             </Col>
             <Col span={8}>
-              <Card>
-                <ReactECharts option={wfChartOptions} style={{ height: '400px' }} />
+              <Card 
+                bordered={false}
+                style={{
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                  borderRadius: '8px'
+                }}
+              >
+              <ReactECharts 
+                option={{
+                  ...wfChartOptions,
+                  series: wfChartOptions?.series?.map(s => ({
+                    ...s,
+                    itemStyle: {
+                      ...s.itemStyle,
+                      cursor: 'pointer'
+                    }
+                  }))
+                }}
+                style={{ height: '420px' }}
+                onEvents={{
+                  click: (params) => {
+                    if (params.componentType === 'series') {
+                      const wf = wfStats.slice(0, 10).reverse()[params.dataIndex]?.wf;
+                      if (wf) {
+                        handleChartClick('wfs', wf);
+                      }
+                    }
+                  }
+                }}
+              />
               </Card>
             </Col>
             <Col span={8}>
-              <Card>
+              <Card 
+                bordered={false}
+                style={{
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                  borderRadius: '8px'
+                }}
+              >
                 {testChartOptions ? (
-                  <ReactECharts option={testChartOptions} style={{ height: '400px' }} />
+                  <ReactECharts 
+                    option={{
+                      ...testChartOptions,
+                      series: testChartOptions?.series?.map(s => ({
+                        ...s,
+                        itemStyle: {
+                          ...s.itemStyle,
+                          cursor: 'pointer'
+                        }
+                      }))
+                    }}
+                    style={{ height: '420px' }}
+                    onEvents={{
+                      click: (params) => {
+                        if (params.componentType === 'series') {
+                          const failedTest = testStats.slice(0, 10).reverse()[params.dataIndex]?.testName;
+                          if (failedTest) {
+                            handleChartClick('failed_tests', failedTest);
+                          }
+                        }
+                      }
+                    }}
+                  />
                 ) : (
-                  <div style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ height: '420px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <span style={{ color: '#999' }}>暂无数据</span>
                   </div>
                 )}
@@ -639,14 +976,22 @@ function AnalysisView({
             {/* FA Status Distribution Chart */}
             {faStatusStats && faStatusStats.length > 0 && (
               <Col span={12}>
-                <Card title="FA Status 分布" style={{ height: '100%' }}>
+                <Card 
+                  title="FA Status 分布" 
+                  bordered={false}
+                  style={{ 
+                    height: '100%',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    borderRadius: '8px'
+                  }}
+                >
                   <Row gutter={[16, 0]}>
                     <Col span={14}>
                       <ReactECharts 
                         option={{
                           tooltip: {
                             trigger: 'item',
-                            formatter: '{b}: {c} ({d}%)'
+                            formatter: '{b}: {c} ({d}%)'  
                           },
                           legend: {
                             orient: 'horizontal',
@@ -676,7 +1021,8 @@ function AnalysisView({
                               itemStyle: {
                                 borderRadius: 4,
                                 borderColor: '#fff',
-                                borderWidth: 2
+                                borderWidth: 2,
+                                cursor: 'pointer'
                               },
                               label: {
                                 show: true,
@@ -703,7 +1049,14 @@ function AnalysisView({
                             }
                           ]
                         }}
-                        style={{ height: '380px' }} 
+                        style={{ height: '380px' }}
+                        onEvents={{
+                          click: (params) => {
+                            if (params.name) {
+                              handleChartClick('fa_statuses', params.name);
+                            }
+                          }
+                        }}
                       />
                     </Col>
                     <Col span={10}>
@@ -716,14 +1069,18 @@ function AnalysisView({
                               dataIndex: 'status', 
                               key: 'status',
                               width: '50%',
-                              ellipsis: true
+                              ellipsis: true,
+                              onHeaderCell: () => ({ style: FONT_STYLES.tableHeader }),
+                              onCell: () => ({ style: { ...FONT_STYLES.tableBody, cursor: 'pointer' } })
                             },
                             { 
                               title: 'Count', 
                               dataIndex: 'count', 
                               key: 'count',
                               width: '25%',
-                              align: 'right'
+                              align: 'right',
+                              onHeaderCell: () => ({ style: FONT_STYLES.tableHeader }),
+                              onCell: () => ({ style: { ...FONT_STYLES.tableBody, cursor: 'pointer' } })
                             },
                             { 
                               title: 'Percentage', 
@@ -731,13 +1088,18 @@ function AnalysisView({
                               key: 'percentage',
                               width: '25%',
                               align: 'right',
-                              render: (val) => `${val}%`
+                              render: (val) => <span style={FONT_STYLES.tableBody}>{val}%</span>,
+                              onHeaderCell: () => ({ style: FONT_STYLES.tableHeader })
                             },
                           ]}
                           dataSource={faStatusStats}
                           rowKey="status"
                           pagination={false}
                           showHeader={true}
+                          onRow={(record) => ({
+                            onClick: () => handleTableRowClick('fa_statuses', record.status),
+                            style: { cursor: 'pointer' }
+                          })}
                         />
                       </div>
                     </Col>
@@ -748,13 +1110,28 @@ function AnalysisView({
 
             {/* Config Stats Table */}
             <Col span={faStatusStats && faStatusStats.length > 0 ? 12 : 24}>
-              <Card title="Config维度失败率统计" style={{ height: '100%' }}>
+              <Card 
+                title="Config维度失败率统计" 
+                bordered={false}
+                style={{ 
+                  height: '100%',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                  borderRadius: '8px'
+                }}
+              >
                 <Table
-                  columns={configColumns}
+                  columns={configColumns.map((col) => ({
+                    ...col,
+                    onCell: () => ({ style: { ...FONT_STYLES.tableBody, cursor: 'pointer' } })
+                  }))}
                   dataSource={configStats}
                   rowKey="config"
                   pagination={false}
                   size="small"
+                  onRow={(record) => ({
+                    onClick: () => handleTableRowClick('configs', record.config),
+                    style: { cursor: 'pointer' }
+                  })}
                 />
               </Card>
             </Col>

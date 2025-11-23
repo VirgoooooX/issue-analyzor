@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Drawer,
@@ -26,22 +26,28 @@ function FilterPanel() {
   const navigate = useNavigate();
   const { filters, filterOptions, projects, setFilter, resetFilters, loadFilterOptions, applyFilters } = useStore();
   const [localFilters, setLocalFilters] = useState({});
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const currentProject = projects.current;
+  const currentProjectId = currentProject?.id; // Store ID separately to avoid reference issues
   const options = filterOptions.data;
   const loading = filterOptions.loading;
 
   // Load filter options when project changes
   useEffect(() => {
-    if (currentProject?.id) {
-      loadFilterOptions(currentProject.id);
+    if (currentProjectId && !isInitialized) {
+      loadFilterOptions(currentProjectId);
+      setIsInitialized(true);
     }
-  }, [currentProject?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProjectId]);
 
   // Reload filter options when local filters change (级联筛选)
   // 实时更新其他筛选器的选项，但每个筛选器查询时会排除自己的条件
+  // DISABLED - causing infinite loop
+  /*
   useEffect(() => {
-    if (currentProject?.id) {
+    if (currentProjectId && isInitialized) {
       // 只传递有值的筛选条件
       const activeFilters = {};
       Object.keys(localFilters).forEach(key => {
@@ -52,14 +58,17 @@ function FilterPanel() {
           activeFilters[key] = value;
         }
       });
-      loadFilterOptions(currentProject.id, activeFilters);
+      loadFilterOptions(currentProjectId, activeFilters);
     }
-  }, [localFilters, currentProject?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localFilters, currentProjectId]);
+  */
 
-  // Initialize local filters from store
+  // Initialize local filters from store - only on mount
   useEffect(() => {
     setLocalFilters(filters);
-  }, [filters]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array - only run on mount
 
   const handleFilterChange = (key, value) => {
     setLocalFilters({
@@ -116,6 +125,10 @@ function FilterPanel() {
   const getActiveTags = () => {
     const tags = [];
     
+    if (localFilters.sn) {
+      tags.push({ key: 'sn', label: `SN: ${localFilters.sn}`, value: localFilters.sn });
+    }
+
     if (localFilters.fa_search) {
       tags.push({ key: 'fa_search', label: `FA#: ${localFilters.fa_search}`, value: localFilters.fa_search });
     }
@@ -176,31 +189,57 @@ function FilterPanel() {
   return (
     <div style={{ width: '300px', height: '100%', display: 'flex', flexDirection: 'column', borderRight: '1px solid #f0f0f0' }}>
       {/* Header */}
-      <div style={{ padding: '12px', borderBottom: '1px solid #f0f0f0' }}>
-        <Space direction="vertical" style={{ width: '100%' }} size="small">
-          <div style={{ fontSize: '15px', fontWeight: 'bold' }}>
-            <FilterOutlined /> 数据筛选
+      <div style={{ padding: '16px 12px 12px 12px', borderBottom: '1px solid #f0f0f0', background: '#fafafa' }}>
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <div style={{ fontSize: '16px', fontWeight: '600', color: '#262626' }}>
+            <FilterOutlined style={{ marginRight: '8px' }} /> 数据筛选
           </div>
           
-          {/* FA# Search */}
+          {/* SN Search */}
           <Input
-            placeholder="搜索FA编号"
+            placeholder="搜索SN"
             prefix={<SearchOutlined />}
-            value={localFilters.fa_search}
-            onChange={(e) => handleFilterChange('fa_search', e.target.value)}
+            value={localFilters.sn}
+            onChange={(e) => handleFilterChange('sn', e.target.value)}
             allowClear
-            size="small"
           />
+
+          {/* Action Buttons - 移到顶部 */}
+          <Space style={{ width: '100%' }} size="small">
+            <Button
+              type="primary"
+              icon={<FilterOutlined />}
+              onClick={handleApplyFilters}
+              style={{ flex: 1 }}
+              block
+            >
+              应用筛选
+            </Button>
+            <Button 
+              icon={<ReloadOutlined />} 
+              onClick={handleResetFilters}
+            >
+              重置
+            </Button>
+          </Space>
 
           {/* Active Filter Tags */}
           {getActiveTags().length > 0 && (
-            <div>
+            <div style={{ 
+              maxHeight: '120px', 
+              overflowY: 'auto',
+              padding: '8px',
+              background: '#fff',
+              borderRadius: '4px',
+              border: '1px solid #e8e8e8'
+            }}>
               {getActiveTags().map((tag, index) => (
                 <Tag
                   key={index}
                   closable
                   onClose={() => handleRemoveTag(tag.key, tag.value)}
                   style={{ marginBottom: '4px' }}
+                  color="blue"
                 >
                   {tag.label}
                 </Tag>
@@ -212,10 +251,10 @@ function FilterPanel() {
 
       {/* Filters */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
-        <Space direction="vertical" style={{ width: '100%' }} size="small">
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
           {/* Failure Symptom - 最重要 */}
           <div>
-            <div style={{ marginBottom: '6px', fontWeight: 600, color: '#1890ff', fontSize: '13px' }}>Failure Symptom</div>
+            <div style={{ marginBottom: '8px', fontWeight: 600, color: '#1890ff', fontSize: '13px' }}>Failure Symptom</div>
             <Select
               mode="multiple"
               showSearch
@@ -228,13 +267,12 @@ function FilterPanel() {
               filterOption={(input, option) =>
                 option.label.toLowerCase().includes(input.toLowerCase())
               }
-              size="small"
             />
           </div>
 
           {/* Failed Location - 提高优先级 */}
           <div>
-            <div style={{ marginBottom: '6px', fontWeight: 600, color: '#fa8c16', fontSize: '13px' }}>Failed Location</div>
+            <div style={{ marginBottom: '8px', fontWeight: 600, color: '#fa8c16', fontSize: '13px' }}>Failed Location</div>
             <Select
               mode="multiple"
               showSearch
@@ -247,13 +285,12 @@ function FilterPanel() {
               filterOption={(input, option) =>
                 option.label.toLowerCase().includes(input.toLowerCase())
               }
-              size="small"
             />
           </div>
 
           {/* WF */}
           <div>
-            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>WF</div>
+            <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>WF</div>
             <Select
               mode="multiple"
               showSearch
@@ -266,13 +303,12 @@ function FilterPanel() {
               filterOption={(input, option) =>
                 option.label.toLowerCase().includes(input.toLowerCase())
               }
-              size="small"
             />
           </div>
 
           {/* Failed Test */}
           <div>
-            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Failed Test</div>
+            <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>Failed Test</div>
             <Select
               mode="multiple"
               showSearch
@@ -285,13 +321,12 @@ function FilterPanel() {
               filterOption={(input, option) =>
                 option.label.toLowerCase().includes(input.toLowerCase())
               }
-              size="small"
             />
           </div>
 
           {/* Config */}
           <div>
-            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Config</div>
+            <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>Config</div>
             <Select
               mode="multiple"
               showSearch
@@ -304,28 +339,12 @@ function FilterPanel() {
               filterOption={(input, option) =>
                 option.label.toLowerCase().includes(input.toLowerCase())
               }
-              size="small"
-            />
-          </div>
-
-          {/* Priority */}
-          <div>
-            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Priority</div>
-            <Select
-              mode="multiple"
-              style={{ width: '100%' }}
-              placeholder="选择优先级"
-              value={localFilters.priorities}
-              onChange={(value) => handleFilterChange('priorities', value)}
-              options={options.priorities.map((p) => ({ label: p, value: p }))}
-              maxTagCount="responsive"
-              size="small"
             />
           </div>
 
           {/* FA Status */}
           <div>
-            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>FA Status</div>
+            <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>FA Status</div>
             <Select
               mode="multiple"
               style={{ width: '100%' }}
@@ -334,45 +353,41 @@ function FilterPanel() {
               onChange={(value) => handleFilterChange('fa_statuses', value)}
               options={options.faStatuses.map((s) => ({ label: s, value: s }))}
               maxTagCount="responsive"
-              size="small"
             />
           </div>
 
           {/* Open Date */}
           <div>
-            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Open Date</div>
+            <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>Open Date</div>
             <RangePicker
               style={{ width: '100%' }}
-              size="small"
+              placeholder={['开始日期', '结束日期']}
               value={[
                 localFilters.date_from ? dayjs(localFilters.date_from) : null,
                 localFilters.date_to ? dayjs(localFilters.date_to) : null,
               ]}
               onChange={(dates) => {
-                handleFilterChange('date_from', dates ? dates[0]?.format('YYYY-MM-DD') : null);
-                handleFilterChange('date_to', dates ? dates[1]?.format('YYYY-MM-DD') : null);
+                if (dates) {
+                  setLocalFilters({
+                    ...localFilters,
+                    date_from: dates[0]?.format('YYYY-MM-DD') || null,
+                    date_to: dates[1]?.format('YYYY-MM-DD') || null,
+                  });
+                } else {
+                  setLocalFilters({
+                    ...localFilters,
+                    date_from: null,
+                    date_to: null,
+                  });
+                }
               }}
-            />
-          </div>
-
-          {/* Test ID */}
-          <div>
-            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Test ID</div>
-            <Select
-              mode="multiple"
-              style={{ width: '100%' }}
-              placeholder="选择Test ID"
-              value={localFilters.test_ids}
-              onChange={(value) => handleFilterChange('test_ids', value)}
-              options={options.testIds.map((t) => ({ label: t, value: t }))}
-              maxTagCount="responsive"
-              size="small"
+              format="YYYY-MM-DD"
             />
           </div>
 
           {/* Failure Type */}
           <div>
-            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Failure Type</div>
+            <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>Failure Type</div>
             <Select
               mode="multiple"
               style={{ width: '100%' }}
@@ -381,13 +396,12 @@ function FilterPanel() {
               onChange={(value) => handleFilterChange('failure_types', value)}
               options={options.failureTypes.map((t) => ({ label: t, value: t }))}
               maxTagCount="responsive"
-              size="small"
             />
           </div>
 
           {/* Function or Cosmetic */}
           <div>
-            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Function or Cosmetic</div>
+            <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>Function or Cosmetic</div>
             <Select
               mode="multiple"
               style={{ width: '100%' }}
@@ -396,13 +410,12 @@ function FilterPanel() {
               onChange={(value) => handleFilterChange('function_cosmetic', value)}
               options={options.functionCosmetic.map((f) => ({ label: f, value: f }))}
               maxTagCount="responsive"
-              size="small"
             />
           </div>
 
           {/* Sample Status */}
           <div>
-            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Sample Status</div>
+            <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>Sample Status</div>
             <Select
               mode="multiple"
               style={{ width: '100%' }}
@@ -411,13 +424,12 @@ function FilterPanel() {
               onChange={(value) => handleFilterChange('sample_statuses', value)}
               options={options.sampleStatuses.map((s) => ({ label: s, value: s }))}
               maxTagCount="responsive"
-              size="small"
             />
           </div>
 
           {/* Department */}
           <div>
-            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Department</div>
+            <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>Department</div>
             <Select
               mode="multiple"
               style={{ width: '100%' }}
@@ -426,55 +438,34 @@ function FilterPanel() {
               onChange={(value) => handleFilterChange('departments', value)}
               options={options.departments.map((d) => ({ label: d, value: d }))}
               maxTagCount="responsive"
-              size="small"
             />
           </div>
 
           {/* Unit# */}
           <div>
-            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>Unit#</div>
+            <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>Unit#</div>
             <Input
               placeholder="输入Unit#"
               value={localFilters.unit_number}
               onChange={(e) => handleFilterChange('unit_number', e.target.value)}
               allowClear
-              size="small"
             />
           </div>
 
-          {/* SN */}
+          {/* FA# */}
           <div>
-            <div style={{ marginBottom: '6px', fontWeight: 500, fontSize: '13px' }}>SN</div>
+            <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>FA#</div>
             <Input
-              placeholder="输入SN"
-              value={localFilters.sn}
-              onChange={(e) => handleFilterChange('sn', e.target.value)}
+              placeholder="输入FA#"
+              value={localFilters.fa_search}
+              onChange={(e) => handleFilterChange('fa_search', e.target.value)}
               allowClear
-              size="small"
             />
           </div>
-        </Space>
-      </div>
-
-      {/* Footer Actions */}
-      <div style={{ padding: '12px', borderTop: '1px solid #f0f0f0' }}>
-        <Space style={{ width: '100%' }}>
-          <Button
-            type="primary"
-            icon={<FilterOutlined />}
-            onClick={handleApplyFilters}
-            style={{ flex: 1 }}
-            size="small"
-          >
-            应用筛选
-          </Button>
-          <Button icon={<ReloadOutlined />} onClick={handleResetFilters} size="small">
-            重置
-          </Button>
         </Space>
       </div>
     </div>
   );
 }
 
-export default FilterPanel;
+export default React.memo(FilterPanel);

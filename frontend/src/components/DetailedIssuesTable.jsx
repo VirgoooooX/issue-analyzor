@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Tag, Button, Tooltip, Descriptions } from 'antd';
+import { Table, Tag, Button, Tooltip, Descriptions, Card } from 'antd';
 import { DownOutlined, UpOutlined } from '@ant-design/icons';
 import useStore from '../store';
 import ColumnSelector from './ColumnSelector';
@@ -7,7 +7,6 @@ import ColumnSelector from './ColumnSelector';
 const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
   const { issues, loadIssues, filters, filterResults, filterContext, loadFilterResults } = useStore();
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
-  const [sortConfig, setSortConfig] = useState({ field: 'open_date', order: 'descend' });
   const [visibleColumns, setVisibleColumns] = useState([]);
 
   // 根据是否使用筛选结果选择数据源
@@ -32,14 +31,6 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
       if (pagination.current !== issues.page || pagination.pageSize !== issues.limit) {
         loadIssues(projectId, filters, pagination.current, pagination.pageSize);
       }
-    }
-
-    // Handle sorting
-    if (sorter.field) {
-      setSortConfig({
-        field: sorter.field,
-        order: sorter.order,
-      });
     }
   };
 
@@ -74,9 +65,13 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
       title: 'FA#',
       dataIndex: 'fa_number',
       key: 'fa_number',
-      width: 120,
+      width: 100,
       fixed: 'left',
-      sorter: true,
+      sorter: (a, b) => {
+        const numA = parseInt(a.fa_number) || 0;
+        const numB = parseInt(b.fa_number) || 0;
+        return numA - numB;
+      },
       ellipsis: { showTitle: false },
       render: (text) => (
         <Tooltip placement="topLeft" title={text}>
@@ -88,29 +83,38 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
       title: 'Open Date',
       dataIndex: 'open_date',
       key: 'open_date',
-      width: 100,
-      sorter: true,
+      width: 110,
+      sorter: (a, b) => {
+        const dateA = a.open_date ? new Date(a.open_date).getTime() : 0;
+        const dateB = b.open_date ? new Date(b.open_date).getTime() : 0;
+        return dateA - dateB;
+      },
+      defaultSortOrder: 'descend',
     },
     {
       title: 'WF',
       dataIndex: 'wf',
       key: 'wf',
-      width: 80,
-      sorter: true,
+      width: 70,
+      sorter: (a, b) => {
+        const numA = parseInt(a.wf) || 0;
+        const numB = parseInt(b.wf) || 0;
+        return numA - numB;
+      },
     },
     {
       title: 'Config',
       dataIndex: 'config',
       key: 'config',
-      width: 80,
-      sorter: true,
+      width: 100,
+      sorter: (a, b) => (a.config || '').localeCompare(b.config || ''),
     },
     {
       title: 'Failed Location',
       dataIndex: 'failed_location',
       key: 'failed_location',
       width: 150,
-      sorter: true,
+      sorter: (a, b) => (a.failed_location || '').localeCompare(b.failed_location || ''),
       ellipsis: { showTitle: false },
       render: (text) => (
         <Tooltip placement="topLeft" title={text}>
@@ -123,7 +127,7 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
       dataIndex: 'symptom',
       key: 'symptom',
       width: 200,
-      sorter: true,
+      sorter: (a, b) => (a.symptom || '').localeCompare(b.symptom || ''),
       ellipsis: { showTitle: false },
       render: (text) => (
         <Tooltip placement="topLeft" title={text}>
@@ -136,7 +140,7 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
       dataIndex: 'failed_test',
       key: 'failed_test',
       width: 180,
-      sorter: true,
+      sorter: (a, b) => (a.failed_test || '').localeCompare(b.failed_test || ''),
       ellipsis: { showTitle: false },
       render: (text) => (
         <Tooltip placement="topLeft" title={text}>
@@ -148,15 +152,15 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
       title: 'Priority',
       dataIndex: 'priority',
       key: 'priority',
-      width: 80,
-      sorter: true,
+      width: 90,
+      sorter: (a, b) => (a.priority || '').localeCompare(b.priority || ''),
     },
     {
       title: 'Failure Type',
       dataIndex: 'failure_type',
       key: 'failure_type',
-      width: 100,
-      sorter: true,
+      width: 110,
+      sorter: (a, b) => (a.failure_type || '').localeCompare(b.failure_type || ''),
       render: (text) => {
         const color = text === 'Spec.' ? 'blue' : text === 'Strife' ? 'orange' : 'default';
         return <Tag color={color}>{text}</Tag>;
@@ -166,7 +170,7 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
       title: 'Root Cause',
       dataIndex: 'root_cause',
       key: 'root_cause',
-      width: 150,
+      width: 180,
       ellipsis: { showTitle: false },
       render: (text) => (
         <Tooltip placement="topLeft" title={text}>
@@ -179,20 +183,20 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
       dataIndex: 'fa_status',
       key: 'fa_status',
       width: 120,
-      sorter: true,
+      sorter: (a, b) => (a.fa_status || '').localeCompare(b.fa_status || ''),
     },
     {
       title: 'Department',
       dataIndex: 'department',
       key: 'department',
-      width: 100,
-      sorter: true,
+      width: 110,
+      sorter: (a, b) => (a.department || '').localeCompare(b.department || ''),
     },
     {
       title: 'Owner',
       dataIndex: 'owner',
       key: 'owner',
-      width: 100,
+      width: 120,
       ellipsis: { showTitle: false },
       render: (text) => (
         <Tooltip placement="topLeft" title={text}>
@@ -228,14 +232,20 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
   ];
 
   return (
-    <>
-      <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'flex-end' }}>
+    <Card
+      title="Issue 详细数据"
+      bordered={false}
+      style={{
+        boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02)'
+      }}
+      extra={
         <ColumnSelector
           columns={columns}
           visibleColumns={visibleColumns}
           onColumnsChange={setVisibleColumns}
         />
-      </div>
+      }
+    >
       <Table
         columns={visibleColumns.length > 0 ? columns.filter(col => visibleColumns.includes(col.key) || col.key === 'action') : columns}
         dataSource={dataSource.data || dataSource.issues}
@@ -256,10 +266,10 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
           expandedRowRender,
           onExpandedRowsChange: setExpandedRowKeys,
         }}
-        scroll={{ x: 1800, y: 600 }}
+        scroll={{ x: 'max-content' }}
         size="small"
       />
-    </>
+    </Card>
   );
 };
 
