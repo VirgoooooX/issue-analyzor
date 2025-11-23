@@ -4,6 +4,8 @@ const fs = require('fs').promises;
 const config = require('../config');
 const projectModel = require('../models/projectModel');
 const { parseExcelFile } = require('../services/excelParser');
+const cacheService = require('../services/cacheService');
+const { forceSaveDatabase } = require('../models/database');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -143,6 +145,13 @@ async function createProject(req, res, next) {
 
     console.log(`✅ Inserted all data for project ${projectId}`);
 
+    // 强制保存数据库（关键操作）
+    await forceSaveDatabase();
+    console.log(`💾 Database saved for project ${projectId}`);
+
+    // 清除该项目的缓存
+    cacheService.clearProjectCache(projectId);
+
     // Clean up uploaded file
     await fs.unlink(uploadedFilePath);
     uploadedFilePath = null;
@@ -198,6 +207,10 @@ async function deleteProject(req, res, next) {
     } else {
       await projectModel.deleteProject(id);
     }
+
+    // 清除该项目的缓存
+    cacheService.clearProjectCache(id);
+    console.log(`🗑️  Project ${id} deleted and cache cleared`);
 
     res.json({
       success: true,

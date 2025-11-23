@@ -1,5 +1,7 @@
 const analysisModel = require('../models/analysisModel');
 const analysisService = require('../services/analysisService');
+const exportService = require('../services/exportService');
+const cacheService = require('../services/cacheService');
 
 /**
  * Get issues for a project with filters
@@ -47,23 +49,20 @@ async function getAnalysis(req, res, next) {
     const { id } = req.params;
     const filters = req.query;
 
-    // Check cache first (only for non-filtered requests)
-    let analysis;
-    if (Object.keys(filters).length === 0) {
-      analysis = await analysisModel.getAnalysisCache(id, 'full');
-    }
+    // 生成缓存键
+    const cacheKey = cacheService.generateCacheKey('analysis', id, filters);
 
-    if (!analysis) {
-      // Calculate if not cached
-      console.log(`📊 Calculating analysis for project ${id}...`);
-      analysis = await analysisService.calculateProjectAnalysis(id, filters);
-
-      // Save to cache (only for non-filtered requests)
-      if (Object.keys(filters).length === 0) {
-        await analysisModel.saveAnalysisCache(id, 'full', analysis);
-        console.log(`✅ Analysis cached for project ${id}`);
-      }
-    }
+    // 使用缓存服务获取或计算分析数据
+    const analysis = await cacheService.getOrFetch(
+      cacheKey,
+      async () => {
+        console.log(`📊 Calculating analysis for project ${id}...`);
+        const result = await analysisService.calculateProjectAnalysis(id, filters);
+        console.log(`✅ Analysis calculated for project ${id}`);
+        return result;
+      },
+      1000 * 60 * 15 // 15分钟缓存
+    );
 
     res.json({
       success: true,
@@ -82,7 +81,18 @@ async function getTestAnalysis(req, res, next) {
     const { id } = req.params;
     const filters = req.query;
 
-    const testStats = await analysisModel.getTestAnalysis(id, filters);
+    // 生成缓存键
+    const cacheKey = cacheService.generateCacheKey('test_analysis', id, filters);
+
+    // 使用缓存服务
+    const testStats = await cacheService.getOrFetch(
+      cacheKey,
+      async () => {
+        console.log(`📊 Calculating test analysis for project ${id}...`);
+        return await analysisModel.getTestAnalysis(id, filters);
+      },
+      1000 * 60 * 10 // 10分钟缓存
+    );
 
     res.json({
       success: true,
@@ -110,7 +120,22 @@ async function getCrossAnalysis(req, res, next) {
       });
     }
 
-    const crossAnalysis = await analysisModel.getCrossAnalysis(id, dimension1, dimension2, filters);
+    // 生成缓存键
+    const cacheKey = cacheService.generateCacheKey(
+      `cross_${dimension1}_${dimension2}`,
+      id,
+      filters
+    );
+
+    // 使用缓存服务
+    const crossAnalysis = await cacheService.getOrFetch(
+      cacheKey,
+      async () => {
+        console.log(`📊 Calculating cross analysis for project ${id}: ${dimension1} × ${dimension2}`);
+        return await analysisModel.getCrossAnalysis(id, dimension1, dimension2, filters);
+      },
+      1000 * 60 * 10 // 10分钟缓存
+    );
 
     res.json({
       success: true,
@@ -132,7 +157,23 @@ async function getFilterStatistics(req, res, next) {
     const { includeTrend, ...filters } = req.query;
 
     const includeTrendBool = includeTrend === 'true' || includeTrend === '1';
-    const statistics = await analysisModel.getFilterStatistics(id, filters, includeTrendBool);
+
+    // 生成缓存键
+    const cacheKey = cacheService.generateCacheKey(
+      `filter_stats_${includeTrendBool}`,
+      id,
+      filters
+    );
+
+    // 使用缓存服务
+    const statistics = await cacheService.getOrFetch(
+      cacheKey,
+      async () => {
+        console.log(`📊 Calculating filter statistics for project ${id}...`);
+        return await analysisModel.getFilterStatistics(id, filters, includeTrendBool);
+      },
+      1000 * 60 * 5 // 5分钟缓存（筛选结果缓存时间较短）
+    );
 
     res.json({
       success: true,
@@ -167,13 +208,109 @@ async function getFailureRateMatrix(req, res, next) {
   try {
     const { id } = req.params;
     const filters = req.query;
-    const matrixData = await analysisModel.getFailureRateMatrix(id, filters);
+
+    // 生成缓存键
+    const cacheKey = cacheService.generateCacheKey('failure_matrix', id, filters);
+
+    // 使用缓存服务
+    const matrixData = await cacheService.getOrFetch(
+      cacheKey,
+      async () => {
+        console.log(`📊 Calculating failure rate matrix for project ${id}...`);
+        return await analysisModel.getFailureRateMatrix(id, filters);
+      },
+      1000 * 60 * 10 // 10分钟缓存
+    );
 
     res.json({
       success: true,
       data: matrixData,
     });
   } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Export analysis report as Excel (no charts)
+ */
+async function exportExcel(req, res, next) {
+  try {
+    const { id } = req.params;
+    const filters = req.query;
+
+    console.log(`📊 Generating Excel report for project ${id}...`);
+    const buffer = await exportService.generateExcelReport(id, filters);
+
+    const { getDatabase } = require('../models/database');
+    const db = getDatabase();
+    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
+    
+    // Generate filename based on filters
+    let filename = `${project.name}_Analysis`;
+    
+    // Add filter indicators to filename
+    const filterParts = [];
+    if (filters.symptoms) filterParts.push('Symptom');
+    if (filters.wfs) filterParts.push('WF');
+    if (filters.configs) filterParts.push('Config');
+    if (filters.failed_tests) filterParts.push('Test');
+    if (filters.date_from || filters.date_to) filterParts.push('Date');
+    
+    if (filterParts.length > 0) {
+      filename += `_Filtered_${filterParts.join('_')}`;
+    }
+    
+    filename += `_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+    res.send(buffer);
+    console.log(`✅ Excel report generated successfully`);
+  } catch (error) {
+    console.error('Error exporting Excel:', error);
+    next(error);
+  }
+}
+
+/**
+ * Export failure rate matrix as Excel
+ */
+async function exportMatrix(req, res, next) {
+  try {
+    const { id } = req.params;
+    const filters = req.query;
+
+    console.log(`📊 Generating Failure Rate Matrix report for project ${id}...`);
+    const buffer = await exportService.generateMatrixReport(id, filters);
+
+    const { getDatabase } = require('../models/database');
+    const db = getDatabase();
+    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
+    
+    // Generate filename based on filters
+    let filename = `${project.name}_FailureRateMatrix`;
+    
+    // Add filter indicators to filename
+    const filterParts = [];
+    if (filters.symptoms) filterParts.push('Symptom');
+    if (filters.wfs) filterParts.push('WF');
+    if (filters.configs) filterParts.push('Config');
+    if (filters.failed_tests) filterParts.push('Test');
+    if (filters.date_from || filters.date_to) filterParts.push('Date');
+    
+    if (filterParts.length > 0) {
+      filename += `_Filtered_${filterParts.join('_')}`;
+    }
+    
+    filename += `_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+    res.send(buffer);
+    console.log(`✅ Failure Rate Matrix report generated successfully`);
+  } catch (error) {
+    console.error('Error exporting matrix:', error);
     next(error);
   }
 }
@@ -187,4 +324,6 @@ module.exports = {
   getFilterStatistics,
   getSampleSizes,
   getFailureRateMatrix,
+  exportExcel,
+  exportMatrix,
 };

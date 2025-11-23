@@ -6,6 +6,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: issue-analyzer
     ports:
       - "80:80"
     volumes:
@@ -14,4 +15,11 @@ services:
       - ./backend/logs:/app/backend/logs
     environment:
       - NODE_ENV=production
+      - CORS_ORIGIN=*
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

@@ -20,9 +20,5 @@ fi
 # Start Node.js backend
 printf "Starting Node.js backend... "
 cd /app/backend
-if exec node server.js; then
-    echo "[OK]"
-else
-    echo "[FAILED]"
-    exit 1
-fi
+export NODE_ENV=production
+node server.js

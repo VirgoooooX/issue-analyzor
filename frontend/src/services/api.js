@@ -23,6 +23,10 @@ apiClient.interceptors.request.use(
 // Response interceptor
 apiClient.interceptors.response.use(
   (response) => {
+    // Handle blob responses (for file downloads)
+    if (response.config.responseType === 'blob') {
+      return response.data;
+    }
     return response.data;
   },
   (error) => {

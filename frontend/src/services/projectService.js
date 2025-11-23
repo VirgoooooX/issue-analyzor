@@ -73,4 +73,22 @@ export const projectService = {
   async getFailureRateMatrix(projectId, filters = {}) {
     return apiClient.get(`/projects/${projectId}/failure-rate-matrix`, { params: filters });
   },
+
+  // Export to Excel (no charts)
+  async exportExcel(projectId, filters = {}) {
+    const response = await apiClient.get(`/projects/${projectId}/export/excel`, {
+      params: filters,
+      responseType: 'blob',
+    });
+    return response;
+  },
+
+  // Export Failure Rate Matrix to Excel
+  async exportMatrix(projectId, filters = {}) {
+    const response = await apiClient.get(`/projects/${projectId}/export/matrix`, {
+      params: filters,
+      responseType: 'blob',
+    });
+    return response;
+  },
 };

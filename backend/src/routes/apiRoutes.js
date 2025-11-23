@@ -41,4 +41,8 @@ router.get('/:id/filter-statistics', analysisController.getFilterStatistics);
 router.get('/:id/sample-sizes', analysisController.getSampleSizes);
 router.get('/:id/failure-rate-matrix', analysisController.getFailureRateMatrix);
 
+// Export routes
+router.get('/:id/export/excel', analysisController.exportExcel);
+router.get('/:id/export/matrix', analysisController.exportMatrix);
+
 module.exports = router;

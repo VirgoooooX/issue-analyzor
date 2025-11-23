@@ -632,225 +632,288 @@ function AnalysisView({
     },
   ];
 
+  // Calculate failure rate percentage
+  const failureRatePercentage = statistics?.totalSampleSize > 0 
+    ? ((statistics.specCount / statistics.totalSampleSize) * 100).toFixed(2)
+    : '0.00';
+
   return (
     <div>
-      {/* Overview Statistics - Including Today's Issues */}
-      <Row gutter={[16, 16]} style={{ marginBottom: '24px', width: '100%' }}>
-        {/* Today's Issues Mini Card */}
-        <Col flex="1 1 20%">
-          <Card 
-            bordered={false}
-            style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              boxShadow: '0 2px 8px rgba(102, 126, 234, 0.2)',
-              borderRadius: '8px',
-              height: '140px',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              opacity: todayLoading ? 0.7 : 1,
-              position: 'relative',
-              padding: '16px'
-            }}
-            bodyStyle={{ padding: 0, height: '100%' }}
-            onClick={handleTodayClick}
-            onMouseEnter={(e) => {
-              if (!todayLoading) {
-                e.currentTarget.style.boxShadow = '0 4px 16px rgba(102, 126, 234, 0.3)';
-                e.currentTarget.style.transform = 'translateY(-2px)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.2)';
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
-          >
-            {todayLoading ? (
-              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-                <Spin size="small" style={{ color: '#fff' }} />
-              </div>
-            ) : (
-              <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', color: '#fff' }}>
-                <div style={{
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  opacity: 0.95,
-                  letterSpacing: '0.5px'
-                }}>
-                  <CalendarOutlined style={{ marginRight: '4px', fontSize: '13px' }} />
-                  今日
-                </div>
-                <div style={{ textAlign: 'center', fontSize: '48px', fontWeight: '700', lineHeight: '1' }}>
-                  {todayStats?.totalCount || 0}
-                </div>
-                <div style={{ 
-                  fontSize: '11px', 
-                  opacity: 0.85,
-                  background: 'rgba(255,255,255,0.1)',
-                  padding: '4px 8px',
-                  borderRadius: '3px',
-                  alignSelf: 'flex-end'
-                }}>
-                  F:{todayStats?.specCount || 0} SF:{todayStats?.strifeCount || 0}
-                </div>
-              </div>
-            )}
-          </Card>
-        </Col>
-        {/* Total Issues Card */}
+      {/* Overview Statistics - Redesigned KPI Cards */}
+      <Row gutter={16} style={{ marginBottom: '24px' }}>
+        {/* Card 1: Today's Issues */}
         <Col flex="1 1 20%">
           <Card 
             bordered={false}
             style={{
               background: '#fff',
-              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
               borderRadius: '8px',
               height: '140px',
+              cursor: todayLoading ? 'default' : 'pointer',
+              transition: 'all 0.3s ease',
               position: 'relative',
-              padding: '16px'
+              display: 'flex',
+              flexDirection: 'column'
             }}
-            bodyStyle={{ padding: 0, height: '100%' }}
+            bodyStyle={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column' }}
+            onClick={!todayLoading ? handleTodayClick : undefined}
+            onMouseEnter={(e) => {
+              if (!todayLoading) {
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
           >
-            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            {todayLoading ? (
+              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Spin size="small" />
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
+                {/* 顶部：图标 + 标题 */}
+                <div style={{ 
+                  fontSize: '14px', 
+                  color: '#595959', 
+                  fontWeight: '500',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}>
+                  <CalendarOutlined style={{ marginRight: '6px', fontSize: '16px', color: '#1890ff' }} />
+                  今日新增
+                </div>
+                {/* 中部：核心数据 */}
+                <div style={{ 
+                  fontSize: '42px', 
+                  fontWeight: '700', 
+                  color: '#262626',
+                  lineHeight: '1',
+                  textAlign: 'center'
+                }}>
+                  {todayStats?.totalCount || 0}
+                </div>
+                {/* 底部：辅助数据 */}
+                <div style={{ 
+                  fontSize: '13px',
+                  color: '#8c8c8c',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  gap: '12px'
+                }}>
+                  <span style={{ color: '#ff4d4f', fontWeight: '600' }}>
+                    {todayStats?.specCount || 0}F
+                  </span>
+                  <span style={{ color: '#faad14', fontWeight: '600' }}>
+                    {todayStats?.strifeCount || 0}SF
+                  </span>
+                </div>
+              </div>
+            )}
+          </Card>
+        </Col>
+
+        {/* Card 2: Total Issues */}
+        <Col flex="1 1 20%">
+          <Card 
+            bordered={false}
+            style={{
+              background: '#fff',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+              borderRadius: '8px',
+              height: '140px',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+            bodyStyle={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column' }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
+              {/* 顶部：图标 + 标题 */}
               <div style={{ 
-                fontSize: '12px', 
-                color: '#8c8c8c', 
+                fontSize: '14px', 
+                color: '#595959', 
                 fontWeight: '500',
-                letterSpacing: '0.5px'
+                display: 'flex',
+                alignItems: 'center'
               }}>
-                <BugOutlined style={{ marginRight: '6px', color: '#1890ff', fontSize: '13px' }} />
+                <BugOutlined style={{ marginRight: '6px', fontSize: '16px', color: '#1890ff' }} />
                 总Issues数
               </div>
-              <div style={{ textAlign: 'center', fontSize: '48px', fontWeight: '700', color: '#1890ff', lineHeight: '1' }}>
+              {/* 中部：核心数据 */}
+              <div style={{ 
+                fontSize: '42px', 
+                fontWeight: '700', 
+                color: '#262626',
+                lineHeight: '1',
+                textAlign: 'center'
+              }}>
                 {statistics.totalCount}
               </div>
-              <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
-                <span style={{ 
-                  background: '#fff1f0', 
-                  padding: '4px 6px', 
-                  borderRadius: '3px',
-                  color: '#ff4d4f',
-                  fontWeight: '600',
-                  fontSize: '10px'
-                }}>
+              {/* 底部：辅助数据 */}
+              <div style={{ 
+                fontSize: '13px',
+                color: '#8c8c8c',
+                display: 'flex',
+                justifyContent: 'center',
+                gap: '12px'
+              }}>
+                <span style={{ color: '#ff4d4f', fontWeight: '600' }}>
                   {statistics.specCount}F
                 </span>
-                <span style={{ 
-                  background: '#fffbe6', 
-                  padding: '4px 6px', 
-                  borderRadius: '3px',
-                  color: '#faad14',
-                  fontWeight: '600',
-                  fontSize: '10px'
-                }}>
+                <span style={{ color: '#faad14', fontWeight: '600' }}>
                   {statistics.strifeCount}SF
                 </span>
               </div>
             </div>
           </Card>
         </Col>
+
+        {/* Card 3: Symptoms Count */}
         <Col flex="1 1 20%">
           <Card 
             bordered={false}
             style={{
               background: '#fff',
-              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
               borderRadius: '8px',
               height: '140px',
-              position: 'relative',
-              padding: '16px'
+              display: 'flex',
+              flexDirection: 'column'
             }}
-            bodyStyle={{ padding: 0, height: '100%' }}
+            bodyStyle={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column' }}
           >
-            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
+              {/* 顶部：图标 + 标题 */}
               <div style={{ 
-                fontSize: '12px', 
-                color: '#8c8c8c', 
+                fontSize: '14px', 
+                color: '#595959', 
                 fontWeight: '500',
-                letterSpacing: '0.5px'
+                display: 'flex',
+                alignItems: 'center'
               }}>
-                <WarningOutlined style={{ marginRight: '6px', color: '#faad14', fontSize: '13px' }} />
-                症状数
+                <WarningOutlined style={{ marginRight: '6px', fontSize: '16px', color: '#faad14' }} />
+                症状种类
               </div>
-              <div style={{ textAlign: 'center', fontSize: '54px', fontWeight: '700', color: '#faad14', lineHeight: '1' }}>
+              {/* 中部：核心数据 */}
+              <div style={{ 
+                fontSize: '42px', 
+                fontWeight: '700', 
+                color: '#262626',
+                lineHeight: '1',
+                textAlign: 'center'
+              }}>
                 {statistics.uniqueSymptoms || (symptomStats ? symptomStats.length : 0)}
               </div>
-              <div style={{ height: '22px' }}></div>
+              {/* 底部：辅助数据 */}
+              <div style={{ 
+                fontSize: '13px',
+                color: '#8c8c8c',
+                textAlign: 'center'
+              }}>
+                种不同症状
+              </div>
             </div>
           </Card>
         </Col>
+
+        {/* Card 4: WF Count */}
         <Col flex="1 1 20%">
           <Card 
             bordered={false}
             style={{
               background: '#fff',
-              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
               borderRadius: '8px',
               height: '140px',
-              position: 'relative',
-              padding: '16px'
+              display: 'flex',
+              flexDirection: 'column'
             }}
-            bodyStyle={{ padding: 0, height: '100%' }}
+            bodyStyle={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column' }}
           >
-            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
+              {/* 顶部：图标 + 标题 */}
               <div style={{ 
-                fontSize: '12px', 
-                color: '#8c8c8c', 
+                fontSize: '14px', 
+                color: '#595959', 
                 fontWeight: '500',
-                letterSpacing: '0.5px'
+                display: 'flex',
+                alignItems: 'center'
               }}>
-                <ExperimentOutlined style={{ marginRight: '6px', color: '#52c41a', fontSize: '13px' }} />
-                WF数
+                <ExperimentOutlined style={{ marginRight: '6px', fontSize: '16px', color: '#52c41a' }} />
+                WF数量
               </div>
-              <div style={{ textAlign: 'center', fontSize: '54px', fontWeight: '700', color: '#52c41a', lineHeight: '1' }}>
+              {/* 中部：核心数据 */}
+              <div style={{ 
+                fontSize: '42px', 
+                fontWeight: '700', 
+                color: '#262626',
+                lineHeight: '1',
+                textAlign: 'center'
+              }}>
                 {statistics.uniqueWFs}
               </div>
-              <div style={{ height: '22px' }}></div>
+              {/* 底部：辅助数据 */}
+              <div style={{ 
+                fontSize: '13px',
+                color: '#8c8c8c',
+                textAlign: 'center'
+              }}>
+                个不同WF
+              </div>
             </div>
           </Card>
         </Col>
+
+        {/* Card 5: Failure Rate */}
         <Col flex="1 1 20%">
           <Card 
             bordered={false}
             style={{
               background: '#fff',
-              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
               borderRadius: '8px',
               height: '140px',
-              position: 'relative',
-              padding: '16px'
+              display: 'flex',
+              flexDirection: 'column'
             }}
-            bodyStyle={{ padding: 0, height: '100%' }}
+            bodyStyle={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column' }}
           >
-            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
+              {/* 顶部：图标 + 标题 */}
               <div style={{ 
-                fontSize: '12px', 
-                color: '#8c8c8c', 
+                fontSize: '14px', 
+                color: '#595959', 
                 fontWeight: '500',
-                letterSpacing: '0.5px'
+                display: 'flex',
+                alignItems: 'center'
               }}>
-                <SettingOutlined style={{ marginRight: '6px', color: '#ff4d4f', fontSize: '13px' }} />
-                失败率
+                <SettingOutlined style={{ marginRight: '6px', fontSize: '16px', color: '#ff4d4f' }} />
+                Spec失败率
               </div>
-              <div style={{ textAlign: 'center', fontSize: '48px', fontWeight: '700', color: '#ff4d4f', lineHeight: '1' }}>
-                {statistics.specCount}F
+              {/* 中部：核心数据（百分比） */}
+              <div style={{ 
+                fontSize: '42px', 
+                fontWeight: '700', 
+                color: '#262626',
+                lineHeight: '1',
+                textAlign: 'center'
+              }}>
+                {failureRatePercentage}<span style={{ fontSize: '24px', fontWeight: '600' }}>%</span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-end', fontSize: '10px' }}>
-                <span style={{ 
-                  color: '#8c8c8c',
-                  fontWeight: '500'
-                }}>
-                  /{statistics.totalSampleSize}T
+              {/* 底部：辅助数据 */}
+              <div style={{ 
+                fontSize: '13px',
+                color: '#8c8c8c',
+                textAlign: 'center'
+              }}>
+                <span style={{ color: '#ff4d4f', fontWeight: '600' }}>
+                  {statistics.specCount}F
                 </span>
-                <span style={{ 
-                  background: '#fffbe6', 
-                  padding: '3px 6px', 
-                  borderRadius: '3px',
-                  color: '#faad14',
-                  fontWeight: '600',
-                  whiteSpace: 'nowrap'
-                }}>
-                  Strife {statistics.strifeCount}SF
-                </span>
+                <span style={{ margin: '0 4px' }}>/</span>
+                <span>{statistics.totalSampleSize}T</span>
               </div>
             </div>
           </Card>
@@ -858,7 +921,7 @@ function AnalysisView({
       </Row>
 
           {/* Charts */}
-          <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+          <Row gutter={16} style={{ marginBottom: '24px' }}>
             <Col span={8}>
               <Card 
                 bordered={false}

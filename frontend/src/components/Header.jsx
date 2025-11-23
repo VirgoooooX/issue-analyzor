@@ -1,17 +1,19 @@
-import { Layout, Select, Button, Upload, Modal, message, Spin, Menu } from 'antd';
-import { UploadOutlined, ReloadOutlined, DeleteOutlined, BarChartOutlined, DashboardOutlined, HomeOutlined } from '@ant-design/icons';
+import { Layout, Select, Button, Upload, Modal, message, Spin, Menu, Dropdown } from 'antd';
+import { UploadOutlined, ReloadOutlined, DeleteOutlined, BarChartOutlined, DashboardOutlined, HomeOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import useStore from '../store';
+import { projectService } from '../services/projectService';
 
 const { Header: AntHeader } = Layout;
 
 function Header() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { projects, selectProject, uploadProject, deleteProject, setUploadModalOpen, ui } = useStore();
+  const { projects, selectProject, uploadProject, deleteProject, setUploadModalOpen, ui, filterContext } = useStore();
   const { list, current, loading } = projects;
   const [uploading, setUploading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const handleProjectChange = (projectId) => {
     selectProject(projectId);
@@ -61,6 +63,71 @@ function Header() {
       },
     });
   };
+
+  const handleExportExcel = async () => {
+    try {
+      setExporting(true);
+      message.loading({ content: '正在生成Excel报告...', key: 'export' });
+      
+      const filters = location.pathname === '/filter-results' ? filterContext.appliedFilters : {};
+      const blob = await projectService.exportExcel(current?.id, filters);
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${current?.name}_Analysis_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      message.success({ content: 'Excel报告导出成功！', key: 'export' });
+    } catch (error) {
+      console.error('Export Excel failed:', error);
+      message.error({ content: '导出失败，请重试', key: 'export' });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportMatrix = async () => {
+    try {
+      setExporting(true);
+      message.loading({ content: '正在生成失败率矩阵报告...', key: 'export' });
+      
+      const filters = location.pathname === '/filter-results' ? filterContext.appliedFilters : {};
+      const blob = await projectService.exportMatrix(current?.id, filters);
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${current?.name}_FailureRateMatrix_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      message.success({ content: '失败率矩阵报告导出成功！', key: 'export' });
+    } catch (error) {
+      console.error('Export Matrix failed:', error);
+      message.error({ content: '导出失败，请重试', key: 'export' });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const exportMenuItems = [
+    {
+      key: 'excel',
+      label: '导出分析报告',
+      onClick: handleExportExcel,
+    },
+    {
+      key: 'matrix',
+      label: '导出失败率矩阵',
+      onClick: handleExportMatrix,
+    },
+  ];
 
   return (
     <AntHeader
@@ -125,6 +192,15 @@ function Header() {
 
           {current && (
             <>
+              <Dropdown menu={{ items: exportMenuItems }} placement="bottomRight">
+                <Button
+                  type="primary"
+                  icon={<DownloadOutlined />}
+                  loading={exporting}
+                >
+                  导出报告
+                </Button>
+              </Dropdown>
               <Button
                 type="default"
                 ghost

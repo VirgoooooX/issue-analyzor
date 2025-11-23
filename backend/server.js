@@ -4,6 +4,7 @@ const morgan = require('morgan');
 const path = require('path');
 const config = require('./src/config');
 const { initDatabase, closeDatabase } = require('./src/models/database');
+const cacheService = require('./src/services/cacheService');
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
+  const cacheStats = cacheService.getStats();
   res.json({
     success: true,
     message: 'Failure Tracker API is running',
@@ -38,6 +40,12 @@ app.get('/api/health', (req, res) => {
     config: {
       uploadDir: config.upload.dir,
       databasePath: config.database.path,
+    },
+    cache: {
+      size: cacheStats.size,
+      maxSize: cacheStats.maxSize,
+      calculatedSize: `${(cacheStats.calculatedSize / 1024 / 1024).toFixed(2)} MB`,
+      keyCount: cacheStats.keys.length,
     },
   });
 });
@@ -94,20 +102,24 @@ async function startServer() {
       console.log('========================================');
     });
   } catch (error) {
-    console.error('�?Failed to start server:', error);
+    console.error('�?Failed to start server:', error);
     process.exit(1);
   }
 }
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('\n�?Shutting down gracefully...');
+  console.log('\n🛑 Shutting down gracefully...');
+  // 清理缓存
+  cacheService.clearAll();
   await closeDatabase();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.log('\n�?Shutting down gracefully...');
+  console.log('\n🛑 Shutting down gracefully...');
+  // 清理缓存
+  cacheService.clearAll();
   await closeDatabase();
   process.exit(0);
 });

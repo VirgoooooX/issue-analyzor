@@ -63,6 +63,18 @@ CREATE INDEX IF NOT EXISTS idx_issues_priority ON issues(priority);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_issues_project_fa_number 
     ON issues(project_id, fa_number);
 
+-- Composite indexes for common query patterns (性能优化)
+CREATE INDEX IF NOT EXISTS idx_issues_project_wf ON issues(project_id, wf);
+CREATE INDEX IF NOT EXISTS idx_issues_project_config ON issues(project_id, config);
+CREATE INDEX IF NOT EXISTS idx_issues_project_symptom ON issues(project_id, symptom);
+CREATE INDEX IF NOT EXISTS idx_issues_project_failed_test ON issues(project_id, failed_test);
+CREATE INDEX IF NOT EXISTS idx_issues_project_date ON issues(project_id, open_date DESC);
+CREATE INDEX IF NOT EXISTS idx_issues_project_failure_type ON issues(project_id, failure_type);
+CREATE INDEX IF NOT EXISTS idx_issues_wf_config ON issues(wf, config);
+CREATE INDEX IF NOT EXISTS idx_issues_failed_test ON issues(failed_test);
+CREATE INDEX IF NOT EXISTS idx_issues_failure_type ON issues(failure_type);
+CREATE INDEX IF NOT EXISTS idx_issues_department ON issues(department);
+
 -- ====================================
 -- Table 3: sample_sizes (样本量表)
 -- ====================================

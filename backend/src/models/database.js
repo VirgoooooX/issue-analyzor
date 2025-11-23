@@ -5,6 +5,8 @@ const config = require('../config');
 
 let db = null;
 let SQL = null;
+let saveTimer = null; // 防抖定时器
+let pendingSave = false; // 是否有待保存的更改
 
 /**
  * Initialize and open database connection
@@ -60,9 +62,41 @@ async function saveDatabase() {
     const data = db.export();
     const buffer = Buffer.from(data);
     await fs.writeFile(config.database.path, buffer);
+    pendingSave = false;
   } catch (error) {
     console.error('❌ Failed to save database:', error);
     throw error;
+  }
+}
+
+/**
+ * 防抖保存数据库 - 延迟保存以减少文件I/O操作
+ * @param {number} delay - 延迟时间（毫秒），默认1000ms
+ */
+function debouncedSaveDatabase(delay = 1000) {
+  pendingSave = true;
+  
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+  }
+  
+  saveTimer = setTimeout(async () => {
+    if (pendingSave) {
+      await saveDatabase();
+    }
+  }, delay);
+}
+
+/**
+ * 立即保存数据库（用于关键操作）
+ */
+async function forceSaveDatabase() {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  if (pendingSave || db) {
+    await saveDatabase();
   }
 }
 
@@ -91,8 +125,8 @@ function getDatabase() {
           } catch (e) {
             lastInsertRowid = undefined;
           }
-          // Save database after each write operation
-          saveDatabase().catch(err => console.error('Failed to save database:', err));
+          // 使用防抖保存数据库（写操作后延迟保存）
+          debouncedSaveDatabase().catch(err => console.error('Failed to save database:', err));
           return { changes, lastInsertRowid };
         },
         get: (...params) => {
@@ -116,7 +150,8 @@ function getDatabase() {
     },
     exec: (sql) => {
       db.run(sql);
-      return saveDatabase();
+      // 使用防抖保存
+      return debouncedSaveDatabase();
     },
     pragma: (pragma) => {
       try {
@@ -136,7 +171,8 @@ function getDatabase() {
  */
 async function closeDatabase() {
   if (db) {
-    await saveDatabase();
+    // 关闭前确保所有更改都已保存
+    await forceSaveDatabase();
     db.close();
     db = null;
     console.log('✅ Database connection closed');
@@ -147,4 +183,5 @@ module.exports = {
   initDatabase,
   getDatabase,
   closeDatabase,
+  forceSaveDatabase, // 导出强制保存函数供关键操作使用
 };

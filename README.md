@@ -109,7 +109,7 @@ docker-compose logs -f
 - ✅ 高级筛选：日期、症状、WF、Config等多条件筛选
 - ✅ 交叉分析：热力图展示多维度关联关系
 - ✅ 详细数据展示：支持查看具体Issue详情
-- ✅ 数据导出：Excel导出、图表导出
+- ✅ **报告导出**：**Excel报告（不含图表）**、**PDF报告（含图表）**
 - ✅ 数据库持久化：SQLite存储，支持历史版本管理
 - ✅ 响应式设计：适配不同屏幕尺寸
 - ✅ 列选择器：自定义显示列
@@ -149,8 +149,22 @@ docker-compose logs -f
 
 ### 数据导出
 
-- `GET /api/projects/:id/export/excel` - 导出Excel
-- `GET /api/projects/:id/export/chart/:type` - 导出图表
+- `GET /api/projects/:id/export/excel` - 导出Excel报告（不含图表）
+- `POST /api/projects/:id/export/pdf` - 导出PDF报告（含图表）
+
+#### 导出功能说明
+
+**Excel报告**：
+- 包含完整的分析数据（Symptom、WF、Config、Test等）
+- 包含详细的Issue明细表
+- 包含统计概览和筛选条件
+- 格式：`.xlsx`文件，支持多个工作表
+
+**PDF报告**：
+- 包含项目概览和统计摘要
+- 包含Top 10分析结果（Symptom、WF、Config）
+- 支持图表展示（如提供图表数据）
+- 格式：`.pdf`文件，适合打印和分享
 
 ## 数据库设计
 

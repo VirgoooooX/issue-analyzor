@@ -4,11 +4,14 @@ FROM node:18-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
+# Install build dependencies for native modules
+RUN apk add --no-cache python3 make g++
+
 # Copy frontend package files
 COPY frontend/package*.json ./
 
-# Install dependencies and clean cache in one layer
-RUN npm install && npm cache clean --force
+# Install dependencies
+RUN npm ci && npm cache clean --force
 
 # Copy frontend source
 COPY frontend/ ./
@@ -21,17 +24,28 @@ FROM node:18-alpine AS backend-builder
 
 WORKDIR /app/backend
 
+# Install build dependencies for native modules (canvas requires these)
+RUN apk add --no-cache python3 make g++ cairo-dev jpeg-dev pango-dev giflib-dev
+
 # Copy backend package files
 COPY backend/package*.json ./
 
-# Install production dependencies and clean cache in one layer
-RUN npm install --only=production && npm cache clean --force
+# Install production dependencies
+# Note: This will automatically install lru-cache and other new dependencies from package.json
+RUN npm ci --only=production && npm cache clean --force
 
 # Stage 3: Final minimal image
 FROM node:18-alpine
 
-# Install only necessary system dependencies
-RUN apk add --no-cache nginx sqlite && rm -rf /var/cache/apk/*
+# Install runtime dependencies for canvas and other system dependencies
+RUN apk add --no-cache \
+    nginx \
+    sqlite \
+    cairo \
+    jpeg \
+    pango \
+    giflib \
+    && rm -rf /var/cache/apk/*
 
 # Create app directory
 WORKDIR /app
@@ -41,7 +55,7 @@ COPY --from=backend-builder /app/backend/node_modules ./backend/node_modules
 COPY backend/ ./backend/
 
 # Copy database init script
-COPY database/ ./backend/database/
+COPY database/ ./database/
 
 # Copy frontend build
 COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
