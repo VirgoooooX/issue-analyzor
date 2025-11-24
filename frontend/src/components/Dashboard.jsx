@@ -261,9 +261,9 @@ function AnalysisView({
           <strong>${testStat.testName}</strong><br/>
           WF: ${testStat.wfs}<br/>
           <span style="display:inline-block;width:10px;height:10px;background:rgba(255,107,107,0.6);border-radius:2px;margin-right:5px;"></span>
-          Spec.失败率: <strong style="color:#ff6b6b">${testStat.specCount}F/${testStat.totalSamples}T</strong><br/>
+          Spec.失败率: <strong style="color:#ff6b6b">${testStat.specSNCount}F/${testStat.totalSamples}T</strong><br/>
           <span style="display:inline-block;width:10px;height:10px;background:rgba(255,193,7,0.6);border-radius:2px;margin-right:5px;"></span>
-          Strife失败率: <strong style="color:#ffc107">${testStat.strifeCount}SF/${testStat.totalSamples}T</strong><br/>
+          Strife失败率: <strong style="color:#ffc107">${testStat.strifeSNCount}SF/${testStat.totalSamples}T</strong><br/>
           占比: ${testStat.percentage}%
         `;
       }
@@ -304,7 +304,7 @@ function AnalysisView({
       {
         type: 'category',
         position: 'right',
-        data: testStats.slice(0, 10).map((t) => `${t.specCount}F/${t.totalSamples}T`).reverse(),
+        data: testStats.slice(0, 10).map((t) => `${t.specSNCount}F/${t.totalSamples}T`).reverse(),
         axisLabel: {
           show: true,
           ...FONT_STYLES.chartValue,
@@ -371,9 +371,9 @@ function AnalysisView({
         return `
           <strong>${stat.symptom}</strong><br/>
           <span style="display:inline-block;width:10px;height:10px;background:rgba(255,107,107,0.6);border-radius:2px;margin-right:5px;"></span>
-          Spec.失败率: <strong style="color:#ff6b6b">${stat.specCount}F/${stat.totalSamples}T</strong><br/>
+          Spec.失败率: <strong style="color:#ff6b6b">${stat.specSNCount}F/${stat.totalSamples}T</strong><br/>
           <span style="display:inline-block;width:10px;height:10px;background:rgba(255,193,7,0.6);border-radius:2px;margin-right:5px;"></span>
-          Strife失败率: <strong style="color:#ffc107">${stat.strifeCount}SF/${stat.totalSamples}T</strong>
+          Strife失败率: <strong style="color:#ffc107">${stat.strifeSNCount}SF/${stat.totalSamples}T</strong>
         `;
       }
     },
@@ -413,7 +413,7 @@ function AnalysisView({
       {
         type: 'category',
         position: 'right',
-        data: symptomStats.slice(0, 10).map((s) => `${s.specCount}F/${s.totalSamples}T`).reverse(),
+        data: symptomStats.slice(0, 10).map((s) => `${s.specSNCount}F/${s.totalSamples}T`).reverse(),
         axisLabel: {
           show: true,
           ...FONT_STYLES.chartValue,
@@ -480,9 +480,9 @@ function AnalysisView({
           <strong>WF: ${stat.wf}</strong><br/>
           Test: ${stat.testName || 'N/A'}<br/>
           <span style="display:inline-block;width:10px;height:10px;background:rgba(255,107,107,0.6);border-radius:2px;margin-right:5px;"></span>
-          Spec.失败率: <strong style="color:#ff6b6b">${stat.specCount}F/${stat.totalTests}T</strong><br/>
+          Spec.失败率: <strong style="color:#ff6b6b">${stat.specSNCount}F/${stat.totalTests}T</strong><br/>
           <span style="display:inline-block;width:10px;height:10px;background:rgba(255,193,7,0.6);border-radius:2px;margin-right:5px;"></span>
-          Strife失败率: <strong style="color:#ffc107">${stat.strifeCount}SF/${stat.totalTests}T</strong>
+          Strife失败率: <strong style="color:#ffc107">${stat.strifeSNCount}SF/${stat.totalTests}T</strong>
         `;
       }
     },
@@ -522,7 +522,7 @@ function AnalysisView({
       {
         type: 'category',
         position: 'right',
-        data: wfStats.slice(0, 10).map((w) => `${w.specCount}F/${w.totalTests}T`).reverse(),
+        data: wfStats.slice(0, 10).map((w) => `${w.specSNCount}F/${w.totalTests}T`).reverse(),
         axisLabel: {
           show: true,
           ...FONT_STYLES.chartValue,
@@ -582,9 +582,9 @@ function AnalysisView({
       onCell: () => ({ style: FONT_STYLES.tableBody })
     },
     { 
-      title: 'Spec. Failure Count', 
-      dataIndex: 'specCount', 
-      key: 'specCount',
+      title: 'Failed Sample Count', 
+      dataIndex: 'specSNCount', 
+      key: 'specSNCount',
       onHeaderCell: () => ({ style: FONT_STYLES.tableHeader }),
       render: (count, record) => (
         <span style={FONT_STYLES.tableBody}>
@@ -595,11 +595,11 @@ function AnalysisView({
             fontWeight: '500',
             color: '#ff6b6b'
           }}>
-            {count}
+            {record.specSNCount || 0}
           </span>
           {' '}
           <span style={{ ...FONT_STYLES.tableBody, color: '#999' }}>
-            (+{record.strifeCount}
+            (+{record.strifeSNCount || 0}
             <span style={{ 
               backgroundColor: 'rgba(255, 193, 7, 0.15)', 
               padding: '2px 4px', 
@@ -633,7 +633,7 @@ function AnalysisView({
               borderRadius: '3px',
               color: '#ff6b6b'
             }}>
-              {record.specCount}F
+              {record.specSNCount || 0}F
             </span>
             /{record.totalSamples}T
           </span>
@@ -646,7 +646,7 @@ function AnalysisView({
               borderRadius: '3px',
               color: '#ffc107'
             }}>
-              {record.strifeCount}SF
+              {record.strifeSNCount || 0}SF
             </span>
             /{record.totalSamples}T
           </span>
@@ -655,9 +655,9 @@ function AnalysisView({
     },
   ];
 
-  // Calculate failure rate percentage
+  // Calculate failure rate percentage (使用去重后的SN数量)
   const failureRatePercentage = statistics?.totalSampleSize > 0 
-    ? ((statistics.specCount / statistics.totalSampleSize) * 100).toFixed(2)
+    ? ((statistics.specSNCount / statistics.totalSampleSize) * 100).toFixed(2)
     : '0.00';
 
   return (
@@ -933,7 +933,7 @@ function AnalysisView({
                 textAlign: 'center'
               }}>
                 <span style={{ color: '#ff4d4f', fontWeight: '600' }}>
-                  {statistics.specCount}F
+                  {statistics.specSNCount}F
                 </span>
                 <span style={{ margin: '0 4px' }}>/</span>
                 <span>{statistics.totalSampleSize}T</span>

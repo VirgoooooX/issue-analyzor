@@ -24,6 +24,8 @@ function DashboardPage() {
     totalCount: data.overview.totalIssues,
     specCount: data.overview.specIssues,
     strifeCount: data.overview.strifeIssues,
+    specSNCount: data.overview.specSNCount,  // 用于FR计算的去重SN数量
+    strifeSNCount: data.overview.strifeSNCount,  // 用于FR计算的去重SN数量
     uniqueWFs: data.overview.uniqueWFs,
     uniqueSymptoms: data.overview.uniqueSymptoms,
     uniqueConfigs: data.overview.uniqueConfigs,

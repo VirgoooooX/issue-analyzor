@@ -113,6 +113,8 @@ const FilterResultsPage = () => {
     totalCount: filterResults.statistics.totalCount,
     specCount: filterResults.statistics.specCount,
     strifeCount: filterResults.statistics.strifeCount,
+    specSNCount: filterResults.statistics.specSNCount || filterResults.statistics.specCount,  // 用于FR计算的去重SN数量
+    strifeSNCount: filterResults.statistics.strifeSNCount || filterResults.statistics.strifeCount,  // 用于FR计算的去重SN数量
     uniqueWFs: filterResults.statistics.uniqueWFs,
     uniqueConfigs: filterResults.statistics.uniqueConfigs,
     uniqueSymptoms: filterResults.statistics.uniqueSymptoms,

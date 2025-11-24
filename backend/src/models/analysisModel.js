@@ -1,4 +1,5 @@
 const { getDatabase } = require('./database');
+const analysisService = require('../services/analysisService');
 
 /**
  * Analysis Model - Database operations for data querying and analysis
@@ -345,140 +346,36 @@ class AnalysisModel {
    * 根据筛选条件计算统一的样本总数
    */
   async getTestAnalysis(projectId, filters = {}) {
-    const db = getDatabase();
+    // Get issues and sample sizes
+    const [issuesResult, sampleSizes] = await Promise.all([
+      this.getIssues(projectId, { ...filters, page: 1, limit: 100000 }),
+      this.getSampleSizes(projectId),
+    ]);
 
-    // Get all issues for the project (with filters if provided)
-    const issuesResult = await this.getIssues(projectId, { ...filters, page: 1, limit: 100000 });
-    const issues = issuesResult.issues;
+    const issues = issuesResult.issues.filter(issue => 
+      issue.fa_status && issue.fa_status.toLowerCase() !== 'retest pass'
+    );
 
-    // Get sample sizes
-    const sampleSizes = await this.getSampleSizes(projectId);
+    // Use analysisService to calculate test stats
+    const wfSampleMap = analysisService.buildWFSampleMap(sampleSizes);
+    const testStats = analysisService.calculateTestStats(issues, wfSampleMap, filters);
 
-    // Create a map: WF -> totalSamples
-    const wfSampleMap = {};
-    // Create a map: test -> Set of WFs containing this test
-    const testToWFsMap = {};
-    
-    sampleSizes.forEach((sample) => {
-      const totalSamples = Object.values(sample.config_samples).reduce((sum, val) => sum + val, 0);
-      wfSampleMap[sample.waterfall] = totalSamples;
-      
-      // Map each test to its WFs
-      if (sample.tests && Array.isArray(sample.tests)) {
-        sample.tests.forEach((testObj) => {
-          const testName = testObj.testName;
-          if (testName) {
-            if (!testToWFsMap[testName]) {
-              testToWFsMap[testName] = new Set();
-            }
-            testToWFsMap[testName].add(sample.waterfall);
-          }
-        });
-      }
-    });
-
-    // Group issues by failed_test
-    const testStats = {};
-    issues.forEach((issue) => {
-      if (!issue.failed_test) return;
-
-      const testName = issue.failed_test;
-      if (!testStats[testName]) {
-        testStats[testName] = {
-          testName,
-          failureCount: 0,
-          specCount: 0,
-          strifeCount: 0,
-          wfs: new Set(),
-          symptomCounts: {},
-        };
-      }
-
-      testStats[testName].failureCount++;
-      
-      // Count by failure type
-      if (issue.failure_type === 'Spec.') {
-        testStats[testName].specCount++;
-      } else if (issue.failure_type === 'Strife') {
-        testStats[testName].strifeCount++;
-      }
-      
-      // Track WFs where this test failed
-      if (issue.wf) {
-        testStats[testName].wfs.add(issue.wf);
-      }
-      
-      // Count symptoms
-      if (issue.symptom) {
-        testStats[testName].symptomCounts[issue.symptom] = 
-          (testStats[testName].symptomCounts[issue.symptom] || 0) + 1;
-      }
-    });
-
-    // Calculate failure rates and format results
-    const results = Object.values(testStats).map((stat) => {
-      // 为每个测试项独立计算总样品数
-      // 找出包含这个测试的所有WF，然后根据筛选条件计算样品总数
-      let totalSamples = 0;
-      const wfsForTest = testToWFsMap[stat.testName] || new Set();
-      
-      // 根据筛选条件过滤WF
-      let filteredWFs = wfsForTest;
-      if (filters.wfs && filters.wfs.length > 0) {
-        // 如果有WF筛选条件，取交集
-        const filterWFSet = new Set(filters.wfs);
-        filteredWFs = new Set([...wfsForTest].filter(wf => filterWFSet.has(wf)));
-      }
-      
-      // 计算这些WF的总样品数
-      filteredWFs.forEach((wf) => {
-        if (wfSampleMap[wf]) {
-          // 如果有Config筛选条件，只计算这些Config的样品数
-          if (filters.configs && filters.configs.length > 0) {
-            const sample = wfSampleMap[wf];
-            if (sample && sample.configSamples) {
-              filters.configs.forEach((config) => {
-                totalSamples += sample.configSamples[config] || 0;
-              });
-            }
-          } else {
-            // 没有Config筛选条件，计算该WF的所有样品数
-            totalSamples += wfSampleMap[wf];
-          }
-        }
-      });
-      
-      const failureRate = totalSamples > 0 ? (stat.failureCount / totalSamples) * 1000000 : 0;
-      const specFailureRate = totalSamples > 0 ? (stat.specCount / totalSamples) * 1000000 : 0;
-      const percentage = issues.length > 0 ? (stat.failureCount / issues.length) * 100 : 0;
-
-      // Get top symptoms
-      const topSymptoms = Object.entries(stat.symptomCounts)
-        .map(([symptom, count]) => ({ symptom, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 3);
-
-      // Get WF list as string
-      const wfList = Array.from(stat.wfs).sort().join(', ');
-
-      return {
-        testName: stat.testName,
-        wfs: wfList, // WFs where this test failed
-        failureCount: stat.failureCount,
-        specCount: stat.specCount,
-        strifeCount: stat.strifeCount,
-        totalSamples,
-        failureRate: Math.round(failureRate),
-        specFailureRate: Math.round(specFailureRate),
-        percentage: parseFloat(percentage.toFixed(2)),
-        topSymptoms,
-      };
-    });
-
-    // Sort by spec failure rate descending
-    results.sort((a, b) => b.specFailureRate - a.specFailureRate);
-
-    return results;
+    // Format for API response
+    return testStats.map(stat => ({
+      testName: stat.testName,
+      testId: stat.testId,
+      wfs: stat.wfs,
+      failureCount: stat.failureCount,
+      specCount: stat.specCount,
+      strifeCount: stat.strifeCount,
+      specSNCount: stat.specSNCount,  // 用于FR计算的去重SN数量
+      strifeSNCount: stat.strifeSNCount,  // 用于FR计算的去重SN数量
+      totalSamples: stat.totalSamples,
+      failureRate: stat.failureRate,
+      specFailureRate: stat.specFailureRate,
+      strifeFailureRate: stat.strifeFailureRate,
+      percentage: stat.percentage,
+    }));
   }
 
   /**
@@ -511,8 +408,6 @@ class AnalysisModel {
    * Supports dimensions: symptom, config, wf, failed_test, test_id
    */
   async getCrossAnalysis(projectId, dimension1, dimension2, filters = {}) {
-    const db = getDatabase();
-    
     // Validate dimensions
     const validDimensions = ['symptom', 'config', 'wf', 'failed_test', 'test_id'];
     if (!validDimensions.includes(dimension1) || !validDimensions.includes(dimension2)) {
@@ -530,92 +425,17 @@ class AnalysisModel {
     // Get sample sizes
     const sampleSizes = await this.getSampleSizes(projectId);
     
-    // Build comprehensive sample size mapping
-    const wfSampleMap = {};
-    const configTotalSampleMap = {}; // Config -> 该Config在所有WF中的总样本数
-    let projectTotalSamples = 0; // 整个项目的总样本数
-    
-    sampleSizes.forEach((sample) => {
-      const wfTotal = Object.values(sample.config_samples).reduce((sum, val) => sum + val, 0);
-      wfSampleMap[sample.waterfall] = wfTotal;
-      projectTotalSamples += wfTotal;
-      
-      // 累计每个Config的总样本数
-      Object.entries(sample.config_samples).forEach(([config, size]) => {
-        configTotalSampleMap[config] = (configTotalSampleMap[config] || 0) + size;
-      });
-    });
+    // Use analysisService to calculate cross stats
+    const wfSampleMap = analysisService.buildWFSampleMap(sampleSizes);
+    const matrix = analysisService.calculateCrossStats(issues, wfSampleMap, dimension1, dimension2, filters);
 
-    // Group by two dimensions
-    const crossMap = {};
+    // Collect dimension values
     const dimension1Values = new Set();
     const dimension2Values = new Set();
-
-    issues.forEach((issue) => {
-      const dim1Value = issue[dimension1];
-      const dim2Value = issue[dimension2];
-      
-      if (!dim1Value || !dim2Value) return;
-
-      dimension1Values.add(dim1Value);
-      dimension2Values.add(dim2Value);
-
-      const key = `${dim1Value}||${dim2Value}`;
-      if (!crossMap[key]) {
-        crossMap[key] = {
-          dimension1Value: dim1Value,
-          dimension2Value: dim2Value,
-          totalCount: 0,
-          specCount: 0,
-          strifeCount: 0,
-        };
-      }
-
-      crossMap[key].totalCount++;
-      
-      // Count by failure type
-      if (issue.failure_type === 'Spec.') {
-        crossMap[key].specCount++;
-      } else if (issue.failure_type === 'Strife') {
-        crossMap[key].strifeCount++;
-      }
+    matrix.forEach((cell) => {
+      dimension1Values.add(cell.dimension1Value);
+      dimension2Values.add(cell.dimension2Value);
     });
-
-    // Calculate failure rates and format results
-    const matrix = Object.values(crossMap).map((cell) => {
-      // 根据维度类型计算总样本数
-      let totalSamples = 0;
-      
-      if (dimension1 === 'config') {
-        // config × 其他维度：使用该config在所有WF中的总样本数
-        totalSamples = configTotalSampleMap[cell.dimension1Value] || 0;
-      } else if (dimension2 === 'config') {
-        // 其他维度 × config：使用该config在所有WF中的总样本数
-        totalSamples = configTotalSampleMap[cell.dimension2Value] || 0;
-      } else {
-        // 两个维度都不是config：使用整个项目的总样本数
-        totalSamples = projectTotalSamples;
-      }
-
-      // Calculate percentage of total issues
-      const percentage = issues.length > 0 ? (cell.totalCount / issues.length) * 100 : 0;
-
-      return {
-        dimension1Value: cell.dimension1Value,
-        dimension2Value: cell.dimension2Value,
-        totalCount: cell.totalCount,
-        specCount: cell.specCount,
-        strifeCount: cell.strifeCount,
-        percentage: parseFloat(percentage.toFixed(2)),
-        totalSamples,
-        totalFailureRate: totalSamples > 0 ? `${cell.specCount}F+${cell.strifeCount}SF/${totalSamples}T` : 'N/A',
-        specFailureRate: totalSamples > 0 ? `${cell.specCount}F/${totalSamples}T` : 'N/A',
-        strifeFailureRate: totalSamples > 0 ? `${cell.strifeCount}SF/${totalSamples}T` : 'N/A',
-      };
-    });
-
-    // Sort by total count descending
-    matrix.sort((a, b) => b.totalCount - a.totalCount);
 
     return {
       dimension1,
@@ -630,294 +450,16 @@ class AnalysisModel {
    * Get filter statistics for筛选结果页面
    */
   async getFilterStatistics(projectId, filters = {}, includeTrend = false) {
-    const db = getDatabase();
-
     // Get filtered issues
     const issuesResult = await this.getIssues(projectId, { ...filters, limit: 999999 });
     const issues = issuesResult.issues;
 
-    // Get sample sizes with full details
+    // Get sample sizes
     const sampleSizes = await this.getSampleSizes(projectId);
-    const wfSampleMap = {};
-    const wfConfigSampleMap = {};  // WF -> Config -> Sample count
-    const testToWFsMap = {};  // Test -> Set of WFs
     
-    sampleSizes.forEach((sample) => {
-      const totalSamples = Object.values(sample.config_samples).reduce((sum, val) => sum + val, 0);
-      wfSampleMap[sample.waterfall] = totalSamples;
-      wfConfigSampleMap[sample.waterfall] = sample.config_samples;
-      
-      // Build test -> WFs mapping
-      if (sample.tests && Array.isArray(sample.tests)) {
-        sample.tests.forEach((testObj) => {
-          const testName = testObj.testName;
-          if (testName) {
-            if (!testToWFsMap[testName]) {
-              testToWFsMap[testName] = new Set();
-            }
-            testToWFsMap[testName].add(sample.waterfall);
-          }
-        });
-      }
-    });
-
-    // Helper function: 根据筛选条件计算样本总数
-    const calculateTotalSamples = (filterConditions) => {
-      let total = 0;
-      const { wfs, configs, failed_tests } = filterConditions;
-
-      // 确定需要计算的WF集合
-      let targetWFs = new Set();
-
-      if (failed_tests && failed_tests.length > 0) {
-        // 如果有failed_test筛选，找出包含这些test的所有WF
-        failed_tests.forEach((testName) => {
-          const wfsForTest = testToWFsMap[testName];
-          if (wfsForTest) {
-            wfsForTest.forEach(wf => targetWFs.add(wf));
-          }
-        });
-        // 如果同时有WF筛选，取交集
-        if (wfs && wfs.length > 0) {
-          const wfsSet = new Set(wfs);
-          targetWFs = new Set([...targetWFs].filter(wf => wfsSet.has(wf)));
-        }
-      } else if (wfs && wfs.length > 0) {
-        // 只有WF筛选
-        wfs.forEach(wf => targetWFs.add(wf));
-      } else {
-        // 没有WF和failed_test筛选，使用所有WF
-        Object.keys(wfSampleMap).forEach(wf => targetWFs.add(wf));
-      }
-
-      // 计算样本总数
-      if (configs && configs.length > 0) {
-        // 有Config筛选：只计算这些Config的样本数
-        targetWFs.forEach((wf) => {
-          const configSamples = wfConfigSampleMap[wf];
-          if (configSamples) {
-            configs.forEach((config) => {
-              total += configSamples[config] || 0;
-            });
-          }
-        });
-      } else {
-        // 没有Config筛选：计算所有Config的样本数
-        targetWFs.forEach((wf) => {
-          total += wfSampleMap[wf] || 0;
-        });
-      }
-
-      return total;
-    };
-
-    // Basic statistics
-    const totalCount = issues.length;
-    let specCount = 0;
-    let strifeCount = 0;
-    const wfsSet = new Set();
-    const configsSet = new Set();
-    const symptomsSet = new Set();
-
-    issues.forEach((issue) => {
-      if (issue.failure_type === 'Spec.') specCount++;
-      if (issue.failure_type === 'Strife') strifeCount++;
-      if (issue.wf) wfsSet.add(issue.wf);
-      if (issue.config) configsSet.add(issue.config);
-      if (issue.symptom) symptomsSet.add(issue.symptom);
-    });
-
-    // Symptom distribution
-    const symptomMap = {};
-    issues.forEach((issue) => {
-      if (!issue.symptom) return;
-      if (!symptomMap[issue.symptom]) {
-        symptomMap[issue.symptom] = { totalCount: 0, specCount: 0, strifeCount: 0, wfs: new Set() };
-      }
-      symptomMap[issue.symptom].totalCount++;
-      if (issue.failure_type === 'Spec.') symptomMap[issue.symptom].specCount++;
-      if (issue.failure_type === 'Strife') symptomMap[issue.symptom].strifeCount++;
-      if (issue.wf) symptomMap[issue.symptom].wfs.add(issue.wf);
-    });
-
-    // 计算统一的样本总数（根据筛选条件）
-    const globalTotalSamples = calculateTotalSamples(filters);
-
-    const symptomDistribution = Object.entries(symptomMap).map(([symptom, data]) => {
-      return {
-        symptom,
-        totalCount: data.totalCount,
-        specCount: data.specCount,
-        strifeCount: data.strifeCount,
-        totalSamples: globalTotalSamples,
-        percentage: parseFloat(((data.totalCount / totalCount) * 100).toFixed(2)),
-        specRate: globalTotalSamples > 0 ? `${data.specCount}F/${globalTotalSamples}T` : 'N/A',
-        strifeRate: globalTotalSamples > 0 ? `${data.strifeCount}SF/${globalTotalSamples}T` : 'N/A',
-        specFailureRate: globalTotalSamples > 0 ? Math.round((data.specCount / globalTotalSamples) * 1000000) : 0,
-      };
-    }).sort((a, b) => b.specFailureRate - a.specFailureRate);
-
-    // WF distribution
-    const wfMap = {};
-    issues.forEach((issue) => {
-      if (!issue.wf) return;
-      if (!wfMap[issue.wf]) {
-        wfMap[issue.wf] = { totalCount: 0, specCount: 0, strifeCount: 0 };
-      }
-      wfMap[issue.wf].totalCount++;
-      if (issue.failure_type === 'Spec.') wfMap[issue.wf].specCount++;
-      if (issue.failure_type === 'Strife') wfMap[issue.wf].strifeCount++;
-    });
-
-    const wfDistribution = Object.entries(wfMap).map(([wf, data]) => {
-      // 对于WF分布，使用该WF的样本数
-      const totalSamples = wfSampleMap[wf] || 0;
-      return {
-        wf,
-        totalCount: data.totalCount,
-        specCount: data.specCount,
-        strifeCount: data.strifeCount,
-        percentage: parseFloat(((data.totalCount / totalCount) * 100).toFixed(2)),
-        totalSamples,
-        specRate: totalSamples > 0 ? `${data.specCount}F/${totalSamples}T` : 'N/A',
-        strifeRate: totalSamples > 0 ? `${data.strifeCount}SF/${totalSamples}T` : 'N/A',
-        specFailureRate: totalSamples > 0 ? Math.round((data.specCount / totalSamples) * 1000000) : 0,
-      };
-    }).sort((a, b) => b.specFailureRate - a.specFailureRate);
-
-    // Config distribution
-    const configMap = {};
-    issues.forEach((issue) => {
-      if (!issue.config) return;
-      if (!configMap[issue.config]) {
-        configMap[issue.config] = { totalCount: 0, specCount: 0, strifeCount: 0 };
-      }
-      configMap[issue.config].totalCount++;
-      if (issue.failure_type === 'Spec.') configMap[issue.config].specCount++;
-      if (issue.failure_type === 'Strife') configMap[issue.config].strifeCount++;
-    });
-
-    const configDistribution = Object.entries(configMap).map(([config, data]) => ({
-      config,
-      totalCount: data.totalCount,
-      specCount: data.specCount,
-      strifeCount: data.strifeCount,
-      percentage: parseFloat(((data.totalCount / totalCount) * 100).toFixed(2)),
-    })).sort((a, b) => b.totalCount - a.totalCount);
-
-    // Failure type distribution
-    // 使用统一的样本总数计算函数
-    const totalSamples = globalTotalSamples;
-
-    const failureTypeDistribution = [
-      {
-        type: 'Spec.',
-        count: specCount,
-        percentage: totalCount > 0 ? parseFloat(((specCount / totalCount) * 100).toFixed(2)) : 0,
-        rate: totalSamples > 0 ? `${specCount}F/${totalSamples}T` : 'N/A',
-      },
-      {
-        type: 'Strife',
-        count: strifeCount,
-        percentage: totalCount > 0 ? parseFloat(((strifeCount / totalCount) * 100).toFixed(2)) : 0,
-        rate: totalSamples > 0 ? `${strifeCount}SF/${totalSamples}T` : 'N/A',
-      },
-    ];
-
-    // Function/Cosmetic distribution
-    const functionCosmeticMap = {};
-    issues.forEach((issue) => {
-      const category = issue.function_or_cosmetic || '未知';
-      functionCosmeticMap[category] = (functionCosmeticMap[category] || 0) + 1;
-    });
-
-    const functionCosmeticDistribution = Object.entries(functionCosmeticMap).map(([category, count]) => ({
-      category,
-      count,
-      percentage: totalCount > 0 ? parseFloat(((count / totalCount) * 100).toFixed(2)) : 0,
-    })).sort((a, b) => b.count - a.count);
-
-    // FA Status distribution
-    const faStatusMap = {};
-    issues.forEach((issue) => {
-      const status = issue.fa_status || '未知';
-      faStatusMap[status] = (faStatusMap[status] || 0) + 1;
-    });
-
-    const faStatusDistribution = Object.entries(faStatusMap).map(([status, count]) => ({
-      status,
-      count,
-      percentage: totalCount > 0 ? parseFloat(((count / totalCount) * 100).toFixed(2)) : 0,
-    })).sort((a, b) => b.count - a.count);
-
-    const statistics = {
-      totalCount,
-      specCount,
-      strifeCount,
-      uniqueWFs: wfsSet.size,
-      uniqueConfigs: configsSet.size,
-      uniqueSymptoms: symptomsSet.size,
-      totalSamples,
-      wfList: Array.from(wfsSet).sort(),
-      configList: Array.from(configsSet).sort(),
-      symptomDistribution,
-      wfDistribution,
-      configDistribution,
-      failureTypeDistribution,
-      functionCosmeticDistribution,
-      faStatusDistribution,
-    };
-
-    const result = { statistics };
-
-    // Time trend (optional)
-    if (includeTrend && filters.date_from && filters.date_to) {
-      const dateFrom = new Date(filters.date_from);
-      const dateTo = new Date(filters.date_to);
-      const daysDiff = Math.ceil((dateTo - dateFrom) / (1000 * 60 * 60 * 24));
-
-      let granularity = 'day';
-      if (daysDiff > 60) granularity = 'month';
-      else if (daysDiff > 7) granularity = 'week';
-
-      // Group by date
-      const dateMap = {};
-      issues.forEach((issue) => {
-        if (!issue.open_date) return;
-        const date = new Date(issue.open_date);
-        let dateKey;
-
-        if (granularity === 'day') {
-          dateKey = date.toISOString().split('T')[0];
-        } else if (granularity === 'week') {
-          const weekStart = new Date(date);
-          weekStart.setDate(date.getDate() - date.getDay());
-          dateKey = weekStart.toISOString().split('T')[0];
-        } else {
-          dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        }
-
-        if (!dateMap[dateKey]) {
-          dateMap[dateKey] = { totalCount: 0, specCount: 0, strifeCount: 0 };
-        }
-        dateMap[dateKey].totalCount++;
-        if (issue.failure_type === 'Spec.') dateMap[dateKey].specCount++;
-        if (issue.failure_type === 'Strife') dateMap[dateKey].strifeCount++;
-      });
-
-      const data = Object.entries(dateMap).map(([date, counts]) => ({
-        date,
-        ...counts,
-      })).sort((a, b) => a.date.localeCompare(b.date));
-
-      result.timeTrend = {
-        enabled: true,
-        granularity,
-        data,
-      };
-    }
-
-    return result;
+    // Use analysisService to calculate filter stats
+    const wfSampleMap = analysisService.buildWFSampleMap(sampleSizes);
+    return analysisService.calculateFilterStats(issues, wfSampleMap, filters, includeTrend);
   }
 
   /**
@@ -967,8 +509,8 @@ class AnalysisModel {
       });
     });
 
-    // 构建失败数据映射：{ "wf-testName-config": { spec: count, strife: count } }
-    // 关键：一个issue只计算一次，不要重复统计
+    // 构建失败数据映射：{ "wf-testName-config": { spec: SNs Set, strife: SNs Set } }
+    // 关键：一个issue只计算一次，不要重复统计，基于SN去重
     const failureMap = {};
     const processedIssues = new Set(); // 防止重复计算
     
@@ -989,15 +531,16 @@ class AnalysisModel {
       
       const key = `${issue.wf}-${issue.failed_test}-${issue.config}`;
       if (!failureMap[key]) {
-        failureMap[key] = { spec: 0, strife: 0 };
+        failureMap[key] = { specSNs: new Set(), strifeSNs: new Set() };
       }
       
-      // 按失败类型统计
+      // 按失败类型统计，基于SN去重
+      const sn = issue.sn || issue.fa_number;
       const failureType = issue.failure_type ? String(issue.failure_type).trim() : '';
-      if (failureType === 'Spec.' || failureType === 'Spec') {
-        failureMap[key].spec++;
-      } else if (failureType === 'Strife') {
-        failureMap[key].strife++;
+      if ((failureType === 'Spec.' || failureType === 'Spec') && sn) {
+        failureMap[key].specSNs.add(sn);
+      } else if (failureType === 'Strife' && sn) {
+        failureMap[key].strifeSNs.add(sn);
       }
     });
     
@@ -1030,12 +573,12 @@ class AnalysisModel {
         // 为每个 Config 填充数据
         configs.forEach(config => {
           const failureKey = `${wf}-${testName}-${config}`;
-          const failureCounts = failureMap[failureKey] || { spec: 0, strife: 0 };
+          const failureCounts = failureMap[failureKey] || { specSNs: new Set(), strifeSNs: new Set() };
           const totalSamples = configSamples[config] || 0;
           
           // 优先显示 Spec Failure，其次是 Strife
-          const specCount = failureCounts.spec || 0;
-          const strifeCount = failureCounts.strife || 0;
+          const specCount = failureCounts.specSNs.size || 0;
+          const strifeCount = failureCounts.strifeSNs.size || 0;
           
           if (specCount > 0) {
             // 有 Spec Failure：显示为 xxF/xxT

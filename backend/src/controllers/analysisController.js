@@ -61,7 +61,7 @@ async function getAnalysis(req, res, next) {
         console.log(`✅ Analysis calculated for project ${id}`);
         return result;
       },
-      1000 * 60 * 15 // 15分钟缓存
+      0 // 临时禁用缓存以便立即生效
     );
 
     res.json({
@@ -91,7 +91,7 @@ async function getTestAnalysis(req, res, next) {
         console.log(`📊 Calculating test analysis for project ${id}...`);
         return await analysisModel.getTestAnalysis(id, filters);
       },
-      1000 * 60 * 10 // 10分钟缓存
+      0 // 禁用缓存以便立即生效
     );
 
     res.json({
@@ -134,7 +134,7 @@ async function getCrossAnalysis(req, res, next) {
         console.log(`📊 Calculating cross analysis for project ${id}: ${dimension1} × ${dimension2}`);
         return await analysisModel.getCrossAnalysis(id, dimension1, dimension2, filters);
       },
-      1000 * 60 * 10 // 10分钟缓存
+      0 // 禁用缓存以便立即生效
     );
 
     res.json({
@@ -172,7 +172,7 @@ async function getFilterStatistics(req, res, next) {
         console.log(`📊 Calculating filter statistics for project ${id}...`);
         return await analysisModel.getFilterStatistics(id, filters, includeTrendBool);
       },
-      1000 * 60 * 5 // 5分钟缓存（筛选结果缓存时间较短）
+      0 // 禁用缓存以便立即生效
     );
 
     res.json({
@@ -219,7 +219,7 @@ async function getFailureRateMatrix(req, res, next) {
         console.log(`📊 Calculating failure rate matrix for project ${id}...`);
         return await analysisModel.getFailureRateMatrix(id, filters);
       },
-      1000 * 60 * 10 // 10分钟缓存
+      0 // 禁用缓存以便立即生效
     );
 
     res.json({
