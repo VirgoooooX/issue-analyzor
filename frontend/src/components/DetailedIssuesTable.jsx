@@ -7,7 +7,8 @@ import ColumnSelector from './ColumnSelector';
 const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
   const { issues, loadIssues, filters, filterResults, filterContext, loadFilterResults } = useStore();
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
-  const [visibleColumns, setVisibleColumns] = useState([]);
+  // 默认隐藏列：root_cause 和 owner
+  const [visibleColumns, setVisibleColumns] = useState(['root_cause', 'owner']);
 
   // 根据是否使用筛选结果选择数据源
   const dataSource = useFilterResults ? filterResults : issues;
@@ -65,7 +66,7 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
       title: 'FA#',
       dataIndex: 'fa_number',
       key: 'fa_number',
-      width: 100,
+      width: 70,
       fixed: 'left',
       sorter: (a, b) => {
         const numA = parseInt(a.fa_number) || 0;
@@ -80,10 +81,34 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
       ),
     },
     {
+      title: 'SN',
+      dataIndex: 'sn',
+      key: 'sn',
+      width: 80,
+      sorter: (a, b) => (a.sn || '').localeCompare(b.sn || ''),
+      ellipsis: { showTitle: false },
+      render: (text) => (
+        <Tooltip placement="topLeft" title={text}>
+          {text}
+        </Tooltip>
+      ),
+    },
+    {
+      title: 'Unit#',
+      dataIndex: 'unit_number',
+      key: 'unit_number',
+      width: 60,
+      sorter: (a, b) => {
+        const numA = parseInt(a.unit_number) || 0;
+        const numB = parseInt(b.unit_number) || 0;
+        return numA - numB;
+      },
+    },
+    {
       title: 'Open Date',
       dataIndex: 'open_date',
       key: 'open_date',
-      width: 110,
+      width: 100,
       sorter: (a, b) => {
         const dateA = a.open_date ? new Date(a.open_date).getTime() : 0;
         const dateB = b.open_date ? new Date(b.open_date).getTime() : 0;
@@ -95,7 +120,7 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
       title: 'WF',
       dataIndex: 'wf',
       key: 'wf',
-      width: 70,
+      width: 60,
       sorter: (a, b) => {
         const numA = parseInt(a.wf) || 0;
         const numB = parseInt(b.wf) || 0;
@@ -106,14 +131,14 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
       title: 'Config',
       dataIndex: 'config',
       key: 'config',
-      width: 100,
+      width: 90,
       sorter: (a, b) => (a.config || '').localeCompare(b.config || ''),
     },
     {
       title: 'Failed Location',
       dataIndex: 'failed_location',
       key: 'failed_location',
-      width: 150,
+      width: 130,
       sorter: (a, b) => (a.failed_location || '').localeCompare(b.failed_location || ''),
       ellipsis: { showTitle: false },
       render: (text) => (
@@ -126,7 +151,7 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
       title: 'Symptom',
       dataIndex: 'symptom',
       key: 'symptom',
-      width: 200,
+      width: 180,
       sorter: (a, b) => (a.symptom || '').localeCompare(b.symptom || ''),
       ellipsis: { showTitle: false },
       render: (text) => (
@@ -139,7 +164,7 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
       title: 'Failed Test',
       dataIndex: 'failed_test',
       key: 'failed_test',
-      width: 180,
+      width: 160,
       sorter: (a, b) => (a.failed_test || '').localeCompare(b.failed_test || ''),
       ellipsis: { showTitle: false },
       render: (text) => (
@@ -149,17 +174,23 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
       ),
     },
     {
+      title: 'Failed Cycle',
+      dataIndex: 'failed_cycle_count',
+      key: 'failed_cycle_count',
+      width: 90,
+    },
+    {
       title: 'Priority',
       dataIndex: 'priority',
       key: 'priority',
-      width: 90,
+      width: 75,
       sorter: (a, b) => (a.priority || '').localeCompare(b.priority || ''),
     },
     {
       title: 'Failure Type',
       dataIndex: 'failure_type',
       key: 'failure_type',
-      width: 110,
+      width: 100,
       sorter: (a, b) => (a.failure_type || '').localeCompare(b.failure_type || ''),
       render: (text) => {
         const color = text === 'Spec.' ? 'blue' : text === 'Strife' ? 'orange' : 'default';
@@ -170,7 +201,7 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
       title: 'Root Cause',
       dataIndex: 'root_cause',
       key: 'root_cause',
-      width: 180,
+      width: 160,
       ellipsis: { showTitle: false },
       render: (text) => (
         <Tooltip placement="topLeft" title={text}>
@@ -182,21 +213,21 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
       title: 'FA Status',
       dataIndex: 'fa_status',
       key: 'fa_status',
-      width: 120,
+      width: 100,
       sorter: (a, b) => (a.fa_status || '').localeCompare(b.fa_status || ''),
     },
     {
       title: 'Department',
       dataIndex: 'department',
       key: 'department',
-      width: 110,
+      width: 100,
       sorter: (a, b) => (a.department || '').localeCompare(b.department || ''),
     },
     {
       title: 'Owner',
       dataIndex: 'owner',
       key: 'owner',
-      width: 120,
+      width: 100,
       ellipsis: { showTitle: false },
       render: (text) => (
         <Tooltip placement="topLeft" title={text}>

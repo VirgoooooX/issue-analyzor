@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Layout, Button, Tag, Card, Spin } from 'antd';
+import { Layout, Button, Tag, Spin, Card } from 'antd';
 import { ArrowLeftOutlined, CloseOutlined } from '@ant-design/icons';
 import useStore from '../store';
 import AnalysisView from '../components/Dashboard';
@@ -159,9 +159,9 @@ const FilterResultsPage = () => {
         />
 
         {/* 详细数据表格 */}
-        <Card title="Issue 详细数据" style={{ marginTop: '24px' }}>
+        <div style={{ marginTop: '24px' }}>
           <DetailedIssuesTable projectId={projects.current?.id} useFilterResults={true} />
-        </Card>
+        </div>
         
         <div style={{ textAlign: 'center', marginTop: '24px', color: '#999', fontSize: '12px', padding: '20px 0' }}>
           <div>Issue Analyzer System ©2025 By Vigoss</div>

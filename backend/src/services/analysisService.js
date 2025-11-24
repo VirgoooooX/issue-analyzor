@@ -160,11 +160,27 @@ class AnalysisService {
   /**
    * Calculate overview statistics
    * 根据筛选条件计算样本总数
+   * 基于 SN 去重计算 Failure Rate
    */
   calculateOverview(issues, wfSampleMap, filters = {}) {
     const totalIssues = issues.length;
-    const specIssues = issues.filter(i => i.failure_type === 'Spec.').length;
-    const strifeIssues = issues.filter(i => i.failure_type === 'Strife').length;
+    
+    // 基于 SN 去重计算 Spec 和 Strife 失败数
+    const uniqueSpecSNs = new Set();
+    const uniqueStrifeSNs = new Set();
+    
+    issues.forEach((issue) => {
+      const sn = issue.sn || issue.fa_number; // 使用 SN 或 FA# 作为唯一标识
+      if (issue.failure_type === 'Spec.' && sn) {
+        uniqueSpecSNs.add(sn);
+      } else if (issue.failure_type === 'Strife' && sn) {
+        uniqueStrifeSNs.add(sn);
+      }
+    });
+    
+    const specIssues = uniqueSpecSNs.size;  // 去重后的 Spec 失败数
+    const strifeIssues = uniqueStrifeSNs.size;  // 去重后的 Strife 失败数
+    
     const uniqueSymptoms = new Set(issues.map((i) => i.symptom).filter(Boolean)).size;
     // 总WF数应该从WF Sample Size sheet获取（即wfSampleMap的大小）
     const uniqueWFs = wfSampleMap.size;
@@ -194,6 +210,7 @@ class AnalysisService {
   /**
    * Calculate Symptom dimension statistics
    * 根据筛选条件计算样本总数
+   * 基于 SN 去重计算 Failure Rate
    */
   calculateSymptomStats(issues, wfSampleMap, filters = {}) {
     const symptomMap = new Map();
@@ -205,8 +222,8 @@ class AnalysisService {
         symptomMap.set(issue.symptom, {
           symptom: issue.symptom,
           count: 0,
-          specCount: 0,
-          strifeCount: 0,
+          specSNs: new Set(),  // 基于 SN 去重
+          strifeSNs: new Set(),  // 基于 SN 去重
           wfs: new Set(),
           configs: new Set(),
         });
@@ -214,8 +231,9 @@ class AnalysisService {
 
       const stat = symptomMap.get(issue.symptom);
       stat.count++;
-      if (issue.failure_type === 'Spec.') stat.specCount++;
-      if (issue.failure_type === 'Strife') stat.strifeCount++;
+      const sn = issue.sn || issue.fa_number;
+      if (issue.failure_type === 'Spec.' && sn) stat.specSNs.add(sn);
+      if (issue.failure_type === 'Strife' && sn) stat.strifeSNs.add(sn);
       if (issue.wf) stat.wfs.add(issue.wf);
       if (issue.config) stat.configs.add(issue.config);
     });
@@ -229,12 +247,12 @@ class AnalysisService {
         return {
           symptom: stat.symptom,
           count: stat.count,
-          specCount: stat.specCount,
-          strifeCount: stat.strifeCount,
+          specCount: stat.specSNs.size,  // 基于 SN 去重
+          strifeCount: stat.strifeSNs.size,  // 基于 SN 去重
           totalSamples: totalSamples,
           failureRate: totalSamples > 0 ? Math.round((stat.count / totalSamples) * 1000000) : 0,
-          specFailureRate: totalSamples > 0 ? Math.round((stat.specCount / totalSamples) * 1000000) : 0,
-          strifeFailureRate: totalSamples > 0 ? Math.round((stat.strifeCount / totalSamples) * 1000000) : 0,
+          specFailureRate: totalSamples > 0 ? Math.round((stat.specSNs.size / totalSamples) * 1000000) : 0,
+          strifeFailureRate: totalSamples > 0 ? Math.round((stat.strifeSNs.size / totalSamples) * 1000000) : 0,
           affectedWFs: stat.wfs.size,
           affectedConfigs: stat.configs.size,
         };
@@ -245,6 +263,7 @@ class AnalysisService {
   /**
    * Calculate WF dimension statistics
    * 根据筛选条件计算WF的样本数
+   * 基于 SN 去重计算 Failure Rate
    */
   calculateWFStats(issues, wfSampleMap, filters = {}) {
     const wfMap = new Map();
@@ -256,8 +275,8 @@ class AnalysisService {
         wfMap.set(issue.wf, {
           wf: issue.wf,
           count: 0,
-          specCount: 0,
-          strifeCount: 0,
+          specSNs: new Set(),  // 基于 SN 去重
+          strifeSNs: new Set(),  // 基于 SN 去重
           symptoms: new Map(),
           configs: new Map(),
         });
@@ -265,8 +284,9 @@ class AnalysisService {
 
       const stat = wfMap.get(issue.wf);
       stat.count++;
-      if (issue.failure_type === 'Spec.') stat.specCount++;
-      if (issue.failure_type === 'Strife') stat.strifeCount++;
+      const sn = issue.sn || issue.fa_number;
+      if (issue.failure_type === 'Spec.' && sn) stat.specSNs.add(sn);
+      if (issue.failure_type === 'Strife' && sn) stat.strifeSNs.add(sn);
 
       // Count symptoms
       if (issue.symptom) {
@@ -309,11 +329,11 @@ class AnalysisService {
           testName, // 添加 testName
           totalTests: totalSamples, // 使用根据筛选条件计算的样本数
           failureCount: stat.count,
-          specCount: stat.specCount,
-          strifeCount: stat.strifeCount,
+          specCount: stat.specSNs.size,  // 基于 SN 去重
+          strifeCount: stat.strifeSNs.size,  // 基于 SN 去重
           failureRate: totalSamples > 0 ? Math.round((stat.count / totalSamples) * 1000000) : 0,
-          specFailureRate: totalSamples > 0 ? Math.round((stat.specCount / totalSamples) * 1000000) : 0,
-          strifeFailureRate: totalSamples > 0 ? Math.round((stat.strifeCount / totalSamples) * 1000000) : 0,
+          specFailureRate: totalSamples > 0 ? Math.round((stat.specSNs.size / totalSamples) * 1000000) : 0,
+          strifeFailureRate: totalSamples > 0 ? Math.round((stat.strifeSNs.size / totalSamples) * 1000000) : 0,
           topSymptoms,
           configBreakdown,
         };
@@ -323,6 +343,7 @@ class AnalysisService {
 
   /**
    * Calculate Config dimension statistics
+   * 基于 SN 去重计算 Failure Rate
    */
   calculateConfigStats(issues, wfSampleMap) {
     const configMap = new Map();
@@ -334,16 +355,17 @@ class AnalysisService {
         configMap.set(issue.config, {
           config: issue.config,
           count: 0,
-          specCount: 0,
-          strifeCount: 0,
+          specSNs: new Set(),  // 基于 SN 去重
+          strifeSNs: new Set(),  // 基于 SN 去重
           wfCounts: new Map(),
         });
       }
 
       const stat = configMap.get(issue.config);
       stat.count++;
-      if (issue.failure_type === 'Spec.') stat.specCount++;
-      if (issue.failure_type === 'Strife') stat.strifeCount++;
+      const sn = issue.sn || issue.fa_number;
+      if (issue.failure_type === 'Spec.' && sn) stat.specSNs.add(sn);
+      if (issue.failure_type === 'Strife' && sn) stat.strifeSNs.add(sn);
       stat.wfCounts.set(issue.wf, (stat.wfCounts.get(issue.wf) || 0) + 1);
     });
 
@@ -363,12 +385,12 @@ class AnalysisService {
         return {
           config: stat.config,
           failureCount: stat.count,
-          specCount: stat.specCount,
-          strifeCount: stat.strifeCount,
+          specCount: stat.specSNs.size,  // 基于 SN 去重
+          strifeCount: stat.strifeSNs.size,  // 基于 SN 去重
           totalSamples,
           failureRate: totalSamples > 0 ? Math.round((stat.count / totalSamples) * 1000000) : 0,
-          specFailureRate: totalSamples > 0 ? Math.round((stat.specCount / totalSamples) * 1000000) : 0,
-          strifeFailureRate: totalSamples > 0 ? Math.round((stat.strifeCount / totalSamples) * 1000000) : 0,
+          specFailureRate: totalSamples > 0 ? Math.round((stat.specSNs.size / totalSamples) * 1000000) : 0,
+          strifeFailureRate: totalSamples > 0 ? Math.round((stat.strifeSNs.size / totalSamples) * 1000000) : 0,
           affectedWFs: stat.wfCounts.size,
         };
       })
@@ -394,16 +416,17 @@ class AnalysisService {
           testName: testName,
           testId: issue.test_id,
           count: 0,
-          specCount: 0,
-          strifeCount: 0,
+          specSNs: new Set(),  // 基于 SN 去重
+          strifeSNs: new Set(),  // 基于 SN 去重
           wfs: new Set(), // 记录所有包含该test的WF
         });
       }
 
       const stat = testMap.get(testName);
       stat.count++;
-      if (issue.failure_type === 'Spec.') stat.specCount++;
-      if (issue.failure_type === 'Strife') stat.strifeCount++;
+      const sn = issue.sn || issue.fa_number;
+      if (issue.failure_type === 'Spec.' && sn) stat.specSNs.add(sn);
+      if (issue.failure_type === 'Strife' && sn) stat.strifeSNs.add(sn);
       if (issue.wf) stat.wfs.add(issue.wf);
     });
 
@@ -430,12 +453,12 @@ class AnalysisService {
           testId: stat.testId,
           wfs: Array.from(stat.wfs).join(', '), // 显示所有包含该test的WF
           failureCount: stat.count,
-          specCount: stat.specCount,
-          strifeCount: stat.strifeCount,
+          specCount: stat.specSNs.size,  // 基于 SN 去重
+          strifeCount: stat.strifeSNs.size,  // 基于 SN 去重
           totalSamples: testTotalSamples, // 每个测试项独立的总样品数
           failureRate: testTotalSamples > 0 ? Math.round((stat.count / testTotalSamples) * 1000000) : 0,
-          specFailureRate: testTotalSamples > 0 ? Math.round((stat.specCount / testTotalSamples) * 1000000) : 0,
-          strifeFailureRate: testTotalSamples > 0 ? Math.round((stat.strifeCount / testTotalSamples) * 1000000) : 0,
+          specFailureRate: testTotalSamples > 0 ? Math.round((stat.specSNs.size / testTotalSamples) * 1000000) : 0,
+          strifeFailureRate: testTotalSamples > 0 ? Math.round((stat.strifeSNs.size / testTotalSamples) * 1000000) : 0,
           percentage: testTotalSamples > 0 ? parseFloat(((stat.count / testTotalSamples) * 100).toFixed(2)) : 0,
         };
       })

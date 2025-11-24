@@ -74,6 +74,8 @@ function parseSystemTF(sheet) {
       if (fieldName) {
         columnMapping[colNum] = fieldName;
         console.log(`  Col ${colNum} "${headerValue}" -> ${fieldName}`);
+      } else {
+        console.log(`  Col ${colNum} "${headerValue}" -> (not mapped)`);
       }
     }
   }
@@ -220,6 +222,9 @@ function parseIssueRow(row) {
     failedLocation: row.failedLocation ? String(row.failedLocation).trim() : null,
     functionOrCosmetic: row.functionOrCosmetic ? String(row.functionOrCosmetic).trim() : null,
     multiComponent: row.multiComponent ? String(row.multiComponent).trim() : null,
+    sn: row.sn ? String(row.sn).trim() : null,
+    unitNumber: row.unitNumber ? String(row.unitNumber).trim() : null,
+    failedCycleCount: row.failedCycleCount ? String(row.failedCycleCount).trim() : null,
     rawData: JSON.stringify(row), // Store all 30 fields as JSON
   };
 }

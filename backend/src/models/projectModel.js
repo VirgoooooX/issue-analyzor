@@ -133,8 +133,8 @@ class ProjectModel {
       `INSERT INTO issues (
         project_id, fa_number, open_date, wf, config, symptom, failed_test, test_id,
         priority, failure_type, root_cause, fa_status, department, owner,
-        sample_status, failed_location, function_or_cosmetic, multi_component, raw_data
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        sample_status, failed_location, function_or_cosmetic, multi_component, sn, unit_number, failed_cycle_count, raw_data
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
 
     // sql.js doesn't support transactions, so we insert directly
@@ -158,6 +158,9 @@ class ProjectModel {
         issue.failedLocation,
         issue.functionOrCosmetic,
         issue.multiComponent,
+        issue.sn,
+        issue.unitNumber,
+        issue.failedCycleCount,
         issue.rawData
       );
     }

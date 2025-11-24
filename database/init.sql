@@ -46,6 +46,9 @@ CREATE TABLE IF NOT EXISTS issues (
     failed_location TEXT,
     function_or_cosmetic TEXT,
     multi_component TEXT,
+    sn TEXT,  -- Serial Number
+    unit_number TEXT,  -- Unit number
+    failed_cycle_count INTEGER,  -- Failed cycle count
     raw_data TEXT,  -- JSON字符串，存储原始30个字段
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE

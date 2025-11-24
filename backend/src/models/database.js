@@ -43,6 +43,9 @@ async function initDatabase() {
 
     console.log('✅ Database tables initialized');
 
+    // Run migrations to add missing columns
+    await runMigrations();
+
     // Save database to file
     await saveDatabase();
 
@@ -101,6 +104,39 @@ async function forceSaveDatabase() {
   }
   if (pendingSave || db) {
     await saveDatabase();
+  }
+}
+
+/**
+ * Run database migrations to add missing columns
+ */
+async function runMigrations() {
+  try {
+    const migrations = [
+      // Add sn column if it doesn't exist
+      `ALTER TABLE issues ADD COLUMN sn TEXT;`,
+      // Add unit_number column if it doesn't exist
+      `ALTER TABLE issues ADD COLUMN unit_number TEXT;`,
+      // Add failed_cycle_count column if it doesn't exist
+      `ALTER TABLE issues ADD COLUMN failed_cycle_count INTEGER;`,
+    ];
+
+    for (const migration of migrations) {
+      try {
+        db.run(migration);
+        console.log(`✅ Migration executed: ${migration.substring(0, 50)}...`);
+      } catch (error) {
+        // Column might already exist, which is fine
+        if (error.message && error.message.includes('duplicate column')) {
+          console.log(`✅ Column already exists (skipped): ${migration.substring(0, 50)}...`);
+        } else {
+          console.warn(`⚠️  Migration error: ${error.message}`);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('❌ Migration failed:', error);
+    // Don't throw - migrations are non-critical
   }
 }
 
