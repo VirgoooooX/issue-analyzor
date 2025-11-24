@@ -10,13 +10,26 @@ async function parseExcelFile(filePath) {
   try {
     // Read Excel file
     const workbook = XLSX.readFile(filePath);
+    
+    // Log all available sheets
+    console.log('📊 Available sheets in Excel file:', workbook.SheetNames);
 
-    // Parse System TF sheet (Sheet 1)
-    const systemTFSheet = workbook.Sheets[workbook.SheetNames[config.excel.systemTFSheetIndex]];
+    // Parse System TF sheet (find by name: 'System TF')
+    const systemTFSheetName = findSheetByName(workbook.SheetNames, ['System TF', 'SystemTF', 'System']);
+    if (!systemTFSheetName) {
+      throw new Error(`Could not find "System TF" sheet in Excel file. Available sheets: ${workbook.SheetNames.join(', ')}`);
+    }
+    console.log('✅ Found System TF sheet:', systemTFSheetName);
+    const systemTFSheet = workbook.Sheets[systemTFSheetName];
     const issues = parseSystemTF(systemTFSheet);
 
-    // Parse WF Sample size sheet (Sheet 5)
-    const sampleSizeSheet = workbook.Sheets[workbook.SheetNames[config.excel.sampleSizeSheetIndex]];
+    // Parse WF Sample size sheet (find by name: 'WF Sample Size' or similar)
+    const sampleSizeSheetName = findSheetByName(workbook.SheetNames, ['WF Sample Size', 'WF Sample Sizes', 'Sample Size', 'WF']);
+    if (!sampleSizeSheetName) {
+      throw new Error(`Could not find "WF Sample Size" sheet in Excel file. Available sheets: ${workbook.SheetNames.join(', ')}`);
+    }
+    console.log('✅ Found WF Sample Size sheet:', sampleSizeSheetName);
+    const sampleSizeSheet = workbook.Sheets[sampleSizeSheetName];
     const { sampleSizes, configNames } = parseSampleSizes(sampleSizeSheet);
 
     // Match Failed Test with Test IDs
@@ -212,6 +225,31 @@ function parseIssueRow(row) {
 }
 
 /**
+ * Find sheet by name (case-insensitive, supports multiple naming variations)
+ * @param {Array} sheetNames - List of sheet names from workbook
+ * @param {Array} possibleNames - Possible names to search for
+ * @returns {string} The matching sheet name, or null if not found
+ */
+function findSheetByName(sheetNames, possibleNames) {
+  const normalizedSheets = sheetNames.map(name => ({
+    original: name,
+    normalized: name.toLowerCase().trim()
+  }));
+
+  for (const possibleName of possibleNames) {
+    const normalized = possibleName.toLowerCase().trim();
+    const match = normalizedSheets.find(sheet => sheet.normalized === normalized);
+    if (match) {
+      console.log(`📍 Matched sheet name "${possibleName}" -> "${match.original}"`);
+      return match.original;
+    }
+  }
+
+  console.log(`⚠️ Sheet not found. Searched for: ${possibleNames.join(', ')}`);
+  return null;
+}
+
+/**
  * Parse WF Sample size sheet
  * @param {Object} sheet - XLSX sheet object
  * @returns {Object} Sample sizes and config names
@@ -337,12 +375,17 @@ function generateValidationReport(issues, sampleSizes, configNames) {
 }
 
 /**
- * Parse Excel date to ISO string
+ * Parse Excel date to ISO string (YYYY-MM-DD)
+ * Avoids timezone conversion issues by working directly with date components
  */
 function parseExcelDate(excelDate) {
   if (typeof excelDate === 'number') {
     const date = XLSX.SSF.parse_date_code(excelDate);
-    return new Date(date.y, date.m - 1, date.d).toISOString().split('T')[0];
+    // Format: YYYY-MM-DD (pad month and day with zeros)
+    const year = date.y.toString().padStart(4, '0');
+    const month = String(date.m).padStart(2, '0');
+    const day = String(date.d).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
   return excelDate;
 }

@@ -110,20 +110,43 @@ function AnalysisView({
         setTodayLoading(true);
         const today = dayjs().format('YYYY-MM-DD');
         
-        // Use the analysis service to get today's stats
+        console.log('📅 Loading today stats for date:', today);
+        console.log('📊 Applied filters:', filters);
+        
+        // Build query string with current filters + today's date
+        const queryParams = new URLSearchParams();
+        queryParams.append('date_from', today);
+        queryParams.append('date_to', today);
+        
+        // Add current filters to the query
+        if (filters) {
+          Object.entries(filters).forEach(([key, value]) => {
+            if (Array.isArray(value) && value.length > 0) {
+              value.forEach(v => queryParams.append(key, v));
+            } else if (value && !Array.isArray(value)) {
+              queryParams.append(key, value);
+            }
+          });
+        }
+        
+        // Use the correct API path: /api/projects/:id/filter-statistics
         const response = await fetch(
-          `/api/analysis/filter-statistics/${projectId}?date_from=${today}&date_to=${today}`
+          `/api/projects/${projectId}/filter-statistics?${queryParams.toString()}`
         );
         const result = await response.json();
         
+        console.log('📊 Today stats response:', result);
+        
         if (result.success && result.data?.statistics) {
           const stats = result.data.statistics;
+          console.log('✅ Today stats loaded:', stats);
           setTodayStats({
             totalCount: stats.totalCount,
             specCount: stats.specCount,
             strifeCount: stats.strifeCount
           });
         } else {
+          console.warn('⚠️ No statistics data in response');
           setTodayStats({
             totalCount: 0,
             specCount: 0,
@@ -131,7 +154,7 @@ function AnalysisView({
           });
         }
       } catch (error) {
-        console.error('Failed to load today stats:', error);
+        console.error('❌ Failed to load today stats:', error);
         setTodayStats({
           totalCount: 0,
           specCount: 0,
@@ -143,7 +166,7 @@ function AnalysisView({
     };
     
     loadTodayStats();
-  }, [projectId]);
+  }, [projectId, filters]);
 
   const handleTodayClick = async () => {
     const today = dayjs().format('YYYY-MM-DD');

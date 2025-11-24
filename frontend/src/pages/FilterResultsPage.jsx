@@ -19,6 +19,7 @@ const FilterResultsPage = () => {
     updateFilterContext,
     removeFilterTag,
     clearAllFilters,
+    resetFilters,
   } = useStore();
 
   useEffect(() => {
@@ -41,7 +42,11 @@ const FilterResultsPage = () => {
   }, [searchParams]);
 
   const handleBack = () => {
-    navigate(filterContext.sourceRoute || '/dashboard');
+    // 清除所有筛选条件，然后返回 Dashboard 页面
+    // 同时清除两个地方：filterContext 和 filters
+    clearAllFilters();
+    resetFilters();
+    navigate('/dashboard');
   };
 
   const handleRemoveTag = (tagKey, tagValue) => {
@@ -164,6 +169,6 @@ const FilterResultsPage = () => {
       </Content>
     </Layout>
   );
-};
+}
 
 export default FilterResultsPage;
