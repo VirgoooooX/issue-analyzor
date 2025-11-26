@@ -52,7 +52,7 @@ async function getAnalysis(req, res, next) {
     // 生成缓存键
     const cacheKey = cacheService.generateCacheKey('analysis', id, filters);
 
-    // 使用缓存服务获取或计算分析数据
+    // ... existing code ...
     const analysis = await cacheService.getOrFetch(
       cacheKey,
       async () => {
@@ -61,7 +61,7 @@ async function getAnalysis(req, res, next) {
         console.log(`✅ Analysis calculated for project ${id}`);
         return result;
       },
-      0 // 临时禁用缓存以便立即生效
+      3600 // 缓存1小时
     );
 
     res.json({
@@ -91,7 +91,7 @@ async function getTestAnalysis(req, res, next) {
         console.log(`📊 Calculating test analysis for project ${id}...`);
         return await analysisModel.getTestAnalysis(id, filters);
       },
-      0 // 禁用缓存以便立即生效
+      3600 // 缓存1小时
     );
 
     res.json({
@@ -134,7 +134,7 @@ async function getCrossAnalysis(req, res, next) {
         console.log(`📊 Calculating cross analysis for project ${id}: ${dimension1} × ${dimension2}`);
         return await analysisModel.getCrossAnalysis(id, dimension1, dimension2, filters);
       },
-      0 // 禁用缓存以便立即生效
+      3600 // 缓存1小时
     );
 
     res.json({
@@ -172,7 +172,7 @@ async function getFilterStatistics(req, res, next) {
         console.log(`📊 Calculating filter statistics for project ${id}...`);
         return await analysisModel.getFilterStatistics(id, filters, includeTrendBool);
       },
-      0 // 禁用缓存以便立即生效
+      3600 // 缓存1小时
     );
 
     res.json({
@@ -219,7 +219,7 @@ async function getFailureRateMatrix(req, res, next) {
         console.log(`📊 Calculating failure rate matrix for project ${id}...`);
         return await analysisModel.getFailureRateMatrix(id, filters);
       },
-      0 // 禁用缓存以便立即生效
+      3600 // 缓存1小时
     );
 
     res.json({
