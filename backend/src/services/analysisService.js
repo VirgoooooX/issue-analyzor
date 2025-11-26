@@ -26,7 +26,7 @@ class AnalysisService {
     // Calculate各维度统计
     const symptomStats = this.calculateSymptomStats(allIssues, wfSampleMap, filters);
     const wfStats = this.calculateWFStats(allIssues, wfSampleMap, filters);
-    const configStats = this.calculateConfigStats(allIssues, wfSampleMap);
+    const configStats = this.calculateConfigStats(allIssues, wfSampleMap, filters);
     const testStats = this.calculateTestStats(allIssues, wfSampleMap, filters);
     const overview = this.calculateOverview(allIssues, wfSampleMap, filters);
     const failureTypeStats = this.calculateFailureTypeStats(allIssues);
@@ -385,8 +385,9 @@ class AnalysisService {
    * Calculate Config dimension statistics
    * 基于 SN 去重计算 Failure Rate
    * 显示所有Config（包括没有失败的Config）
+   * 根据筛选条件（WF、Failed Test）应用到样本数计算
    */
-  calculateConfigStats(issues, wfSampleMap) {
+  calculateConfigStats(issues, wfSampleMap, filters = {}) {
     const configMap = new Map();
     // 定义所有可能的Config
     const allConfigs = ['R1CASN', 'R2CBCN', 'R3CBCN', 'R4FNSN'];
@@ -416,12 +417,61 @@ class AnalysisService {
       stat.wfCounts.set(issue.wf, (stat.wfCounts.get(issue.wf) || 0) + 1);
     });
 
-    // 先计算每个Config在所有WF中的总样本数
-    const configTotalSampleMap = new Map();
-    wfSampleMap.forEach((sample, wf) => {
-      Object.entries(sample.configSamples).forEach(([config, size]) => {
-        configTotalSampleMap.set(config, (configTotalSampleMap.get(config) || 0) + size);
+    // ... existing code ...
+    // 根据筛选条件计算每个Config的总样本数
+    const { wfs, failed_tests } = filters;
+    
+    // 确定需要计算的WF集合（考虑WF和Failed Test筛选）
+    let targetWFs = new Set();
+    
+    if (failed_tests && failed_tests.length > 0) {
+      // 如果有failed_test筛选，找出包含这些test的所有WF
+      const testToWFsMap = {};
+      wfSampleMap.forEach((sample, wf) => {
+        if (sample.tests && Array.isArray(sample.tests)) {
+          sample.tests.forEach((testObj) => {
+            const testName = testObj.testName;
+            if (testName) {
+              if (!testToWFsMap[testName]) {
+                testToWFsMap[testName] = new Set();
+              }
+              testToWFsMap[testName].add(wf);
+            }
+          });
+        }
       });
+      
+      failed_tests.forEach((testName) => {
+        const wfsForTest = testToWFsMap[testName];
+        if (wfsForTest) {
+          wfsForTest.forEach(wf => targetWFs.add(wf));
+        }
+      });
+      
+      // 如果同时有WF筛选，取交集
+      if (wfs && wfs.length > 0) {
+        const wfsSet = new Set(wfs);
+        targetWFs = new Set([...targetWFs].filter(wf => wfsSet.has(wf)));
+      }
+    } else if (wfs && wfs.length > 0) {
+      // 只有WF筛选
+      wfs.forEach(wf => targetWFs.add(wf));
+    } else {
+      // 没有WF和failed_test筛选，使用所有WF
+      wfSampleMap.forEach((sample, wf) => targetWFs.add(wf));
+    }
+    
+    // 计算每个Config在目标WF中的总样本数
+    const configTotalSampleMap = new Map();
+    allConfigs.forEach(config => {
+      let total = 0;
+      targetWFs.forEach((wf) => {
+        const sample = wfSampleMap.get(wf);
+        if (sample && sample.configSamples) {
+          total += sample.configSamples[config] || 0;
+        }
+      });
+      configTotalSampleMap.set(config, total);
     });
 
     // Calculate failure rate for each Config
@@ -583,23 +633,87 @@ class AnalysisService {
   /**
    * Calculate cross-dimensional statistics (dimension1 × dimension2)
    * 基于 SN 去重计算
+   * 根据筛选条件（WF、Failed Test、Config）动态计算样本数
    */
   calculateCrossStats(issues, wfSampleMap, dimension1, dimension2, filters = {}) {
     const crossMap = new Map();
+    // 规一化filters中的数组参数
+    let { wfs, failed_tests, configs } = filters;
+    
+    // 将字符串参数转换为数组
+    const parseArrayParam = (value) => {
+      if (!value) return undefined;
+      if (Array.isArray(value)) return value;
+      if (typeof value === 'string') return value.split(',');
+      return undefined;
+    };
+    
+    wfs = parseArrayParam(wfs);
+    failed_tests = parseArrayParam(failed_tests);
+    configs = parseArrayParam(configs);
 
-    // Calculate config total samples for all WFs
-    const configTotalSampleMap = new Map();
-    wfSampleMap.forEach((sample) => {
-      Object.entries(sample.configSamples).forEach(([config, size]) => {
-        configTotalSampleMap.set(config, (configTotalSampleMap.get(config) || 0) + size);
+    // 确定需要计算的WF集合（考虑WF和Failed Test筛选）
+    let targetWFs = new Set();
+    
+    if (failed_tests && failed_tests.length > 0) {
+      // 如果有failed_test筛选，找出包含这些test的所有WF
+      const testToWFsMap = {};
+      wfSampleMap.forEach((sample, wf) => {
+        if (sample.tests && Array.isArray(sample.tests)) {
+          sample.tests.forEach((testObj) => {
+            const testName = testObj.testName;
+            if (testName) {
+              if (!testToWFsMap[testName]) {
+                testToWFsMap[testName] = new Set();
+              }
+              testToWFsMap[testName].add(wf);
+            }
+          });
+        }
       });
-    });
+      
+      failed_tests.forEach((testName) => {
+        const wfsForTest = testToWFsMap[testName];
+        if (wfsForTest) {
+          wfsForTest.forEach(wf => targetWFs.add(wf));
+        }
+      });
+      
+      // 如果同时有WF筛选，取交集
+      if (wfs && wfs.length > 0) {
+        const wfsSet = new Set(wfs);
+        targetWFs = new Set([...targetWFs].filter(wf => wfsSet.has(wf)));
+      }
+    } else if (wfs && wfs.length > 0) {
+      // 只有WF筛选
+      wfs.forEach(wf => targetWFs.add(wf));
+    } else {
+      // 没有WF和failed_test筛选，使用所有WF
+      wfSampleMap.forEach((sample, wf) => targetWFs.add(wf));
+    }
 
-    // Calculate project total samples
-    let projectTotalSamples = 0;
-    wfSampleMap.forEach((sample) => {
-      projectTotalSamples += Object.values(sample.configSamples).reduce((sum, val) => sum + val, 0);
+    // ... existing code ...
+    // 根据维度和筛选条件计算样本数
+    const configTotalSampleMap = new Map();
+    const allConfigs = ['R1CASN', 'R2CBCN', 'R3CBCN', 'R4FNSN'];
+    
+    // 为每个 Config 计算在目标 WF 范围内的样本数
+    allConfigs.forEach(config => {
+      let totalForConfig = 0;
+      targetWFs.forEach((wf) => {
+        const sample = wfSampleMap.get(wf);
+        if (sample && sample.configSamples) {
+          totalForConfig += sample.configSamples[config] || 0;
+        }
+      });
+      configTotalSampleMap.set(config, totalForConfig);
     });
+    
+    // 如果有 Config 筛选，则只使用筛选中的 Config
+    let targetConfigs = null;
+    if (configs && configs.length > 0) {
+      targetConfigs = new Set(configs);
+    }
 
     // Group by two dimensions
     issues.forEach((issue) => {
@@ -633,15 +747,68 @@ class AnalysisService {
 
     // Calculate failure rates
     const results = Array.from(crossMap.values()).map((cell) => {
-      // Determine total samples based on dimensions
+      // 根据维度2的值计算样本数（的分母）
       let totalSamples = 0;
       
-      if (dimension1 === 'config') {
-        totalSamples = configTotalSampleMap.get(cell.dimension1Value) || 0;
-      } else if (dimension2 === 'config') {
+      if (dimension2 === 'config') {
+        // 维度2是Config：计算该Config在目标WF范围内的总样本数
         totalSamples = configTotalSampleMap.get(cell.dimension2Value) || 0;
+      } else if (dimension2 === 'wf') {
+        // 维度2是WF：计算该WF的总样本数（需考虑Config筛选）
+        const sample = wfSampleMap.get(cell.dimension2Value);
+        if (sample && sample.configSamples) {
+          if (targetConfigs) {
+            // 有Config筛选：仅计算筛选中的Config样本数
+            targetConfigs.forEach(config => {
+              totalSamples += sample.configSamples[config] || 0;
+            });
+          } else {
+            // 没有Config筛选：计算整个WF的总样本数
+            totalSamples = Object.values(sample.configSamples).reduce((sum, val) => sum + val, 0);
+          }
+        }
+      } else if (dimension2 === 'failed_test') {
+        // 维度2是Failed Test：计算包含该test的所有WF的样本数
+        const testToWFsMap = {};
+        wfSampleMap.forEach((sample, wf) => {
+          if (sample.tests && Array.isArray(sample.tests)) {
+            sample.tests.forEach((testObj) => {
+              const testName = testObj.testName;
+              if (testName) {
+                if (!testToWFsMap[testName]) {
+                  testToWFsMap[testName] = [];
+                }
+                testToWFsMap[testName].push({ wf, sample });
+              }
+            });
+          }
+        });
+        
+        const wfsForThisTest = testToWFsMap[cell.dimension2Value] || [];
+        wfsForThisTest.forEach(({ wf, sample }) => {
+          if (targetConfigs) {
+            targetConfigs.forEach(config => {
+              totalSamples += sample.configSamples[config] || 0;
+            });
+          } else {
+            totalSamples += Object.values(sample.configSamples).reduce((sum, val) => sum + val, 0);
+          }
+        });
       } else {
-        totalSamples = projectTotalSamples;
+        // ... existing code ...
+        // 维度2是其他维度：计算整个目标WF范围内的总样本数
+        targetWFs.forEach((wf) => {
+          const sample = wfSampleMap.get(wf);
+          if (sample && sample.configSamples) {
+            if (targetConfigs) {
+              targetConfigs.forEach(config => {
+                totalSamples += sample.configSamples[config] || 0;
+              });
+            } else {
+              totalSamples += Object.values(sample.configSamples).reduce((sum, val) => sum + val, 0);
+            }
+          }
+        });
       }
 
       // specCount 和 strifeCount 直接计数，不去重

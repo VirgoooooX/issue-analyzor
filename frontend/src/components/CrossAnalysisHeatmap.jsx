@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Card, Select, Radio, Spin, Space, Typography } from 'antd';
+import { Card, Select, Radio, Spin, Space, Typography, Button, message } from 'antd';
+import { DownloadOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import * as echarts from 'echarts';
 import useStore from '../store';
+import { projectService } from '../services/projectService';
 
 const { Option } = Select;
 const { Text } = Typography;
@@ -33,6 +35,7 @@ const CrossAnalysisHeatmap = ({ projectId, filters: propFilters }) => {
   const { crossAnalysis, loadCrossAnalysis, setCrossAnalysisDimensions, filters: storeFilters, updateFilterContext } = useStore();
   const chartRef = useRef(null);
   const [displayMode, setDisplayMode] = useState('spec'); // spec | strife | total
+  const [exporting, setExporting] = useState(false);
 
   // 使用传入的 filters 或 store 中的 filters
   const currentFilters = propFilters || storeFilters;
@@ -70,6 +73,46 @@ const CrossAnalysisHeatmap = ({ projectId, filters: propFilters }) => {
       setCrossAnalysisDimensions(value, crossAnalysis.dimension2);
     } else {
       setCrossAnalysisDimensions(crossAnalysis.dimension1, value);
+    }
+  };
+
+  const handleExportCrossAnalysis = async () => {
+    try {
+      setExporting(true);
+      message.loading({ content: '正在生成交叉分析报告...', key: 'export' });
+      
+      // 转换 filters 格式以便传输
+      const exportFilters = {};
+      Object.entries(currentFilters).forEach(([key, value]) => {
+        if (Array.isArray(value) && value.length > 0) {
+          exportFilters[key] = value.join(',');
+        } else if (value && !Array.isArray(value) && value !== '') {
+          exportFilters[key] = value;
+        }
+      });
+      
+      const blob = await projectService.exportCrossAnalysis(
+        projectId,
+        crossAnalysis.dimension1,
+        crossAnalysis.dimension2,
+        exportFilters
+      );
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `CrossAnalysis_${crossAnalysis.dimension1}_${crossAnalysis.dimension2}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      message.success({ content: '交叉分析报告导出成功！', key: 'export' });
+    } catch (error) {
+      console.error('Export cross analysis failed:', error);
+      message.error({ content: '导出失败，请重试', key: 'export' });
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -303,7 +346,6 @@ const CrossAnalysisHeatmap = ({ projectId, filters: propFilters }) => {
     { label: 'Config', value: 'config' },
     { label: 'WF', value: 'wf' },
     { label: 'Failed Test', value: 'failed_test' },
-    { label: 'Test ID', value: 'test_id' },
   ];
 
   // 获取维度标签
@@ -375,6 +417,15 @@ const CrossAnalysisHeatmap = ({ projectId, filters: propFilters }) => {
             <Radio.Button value="strife">Strife失败率</Radio.Button>
             <Radio.Button value="total">总失败率</Radio.Button>
           </Radio.Group>
+          <Button
+            type="primary"
+            icon={<DownloadOutlined />}
+            loading={exporting}
+            onClick={handleExportCrossAnalysis}
+            size="middle"
+          >
+            导出
+          </Button>
         </Space>
       }
     >

@@ -405,13 +405,13 @@ class AnalysisModel {
 
   /**
    * Get cross analysis data (dimension1 × dimension2)
-   * Supports dimensions: symptom, config, wf, failed_test, test_id
+   * Supports dimensions: symptom, config, wf, failed_test
    */
   async getCrossAnalysis(projectId, dimension1, dimension2, filters = {}) {
     // Validate dimensions
-    const validDimensions = ['symptom', 'config', 'wf', 'failed_test', 'test_id'];
+    const validDimensions = ['symptom', 'config', 'wf', 'failed_test'];
     if (!validDimensions.includes(dimension1) || !validDimensions.includes(dimension2)) {
-      throw new Error('Invalid dimension. Allowed: symptom, config, wf, failed_test, test_id');
+      throw new Error('Invalid dimension. Allowed: symptom, config, wf, failed_test');
     }
     
     if (dimension1 === dimension2) {

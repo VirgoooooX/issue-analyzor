@@ -44,5 +44,6 @@ router.get('/:id/failure-rate-matrix', analysisController.getFailureRateMatrix);
 // Export routes
 router.get('/:id/export/excel', analysisController.exportExcel);
 router.get('/:id/export/matrix', analysisController.exportMatrix);
+router.get('/:id/export/cross', analysisController.exportCrossAnalysis);
 
 module.exports = router;

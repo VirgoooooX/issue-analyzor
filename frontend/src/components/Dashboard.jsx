@@ -578,34 +578,38 @@ function AnalysisView({
       title: 'Config', 
       dataIndex: 'config', 
       key: 'config',
-      onHeaderCell: () => ({ style: FONT_STYLES.tableHeader }),
-      onCell: () => ({ style: FONT_STYLES.tableBody })
+      width: 100,
+      onHeaderCell: () => ({ style: { ...FONT_STYLES.tableHeader, fontSize: '14px', fontWeight: '700' } }),
+      onCell: () => ({ style: { ...FONT_STYLES.tableBody, fontSize: '14px', fontWeight: '600' } })
     },
     { 
       title: 'Failed Sample Count', 
       dataIndex: 'specSNCount', 
       key: 'specSNCount',
-      onHeaderCell: () => ({ style: FONT_STYLES.tableHeader }),
+      onHeaderCell: () => ({ style: { ...FONT_STYLES.tableHeader, fontSize: '14px', fontWeight: '700' } }),
       render: (count, record) => (
-        <span style={FONT_STYLES.tableBody}>
+        <span style={{ ...FONT_STYLES.tableBody, fontSize: '13px' }}>
           <span style={{ 
             backgroundColor: 'rgba(255, 107, 107, 0.15)', 
-            padding: '2px 6px', 
+            padding: '3px 8px', 
             borderRadius: '3px',
-            fontWeight: '500',
-            color: '#ff6b6b'
+            fontWeight: '600',
+            color: '#ff6b6b',
+            fontSize: '13px'
           }}>
             {record.specSNCount || 0}
           </span>
           {' '}
-          <span style={{ ...FONT_STYLES.tableBody, color: '#999' }}>
+          <span style={{ ...FONT_STYLES.tableBody, color: '#666', fontSize: '13px', fontWeight: '500' }}>
             (+{record.strifeSNCount || 0}
             <span style={{ 
               backgroundColor: 'rgba(255, 193, 7, 0.15)', 
-              padding: '2px 4px', 
+              padding: '2px 6px', 
               borderRadius: '3px',
-              marginLeft: '2px',
-              color: '#ffc107'
+              marginLeft: '3px',
+              color: '#ffc107',
+              fontWeight: '600',
+              fontSize: '12px'
             }}>SF</span>)
           </span>
         </span>
@@ -615,40 +619,45 @@ function AnalysisView({
       title: 'Total Samples', 
       dataIndex: 'totalSamples', 
       key: 'totalSamples',
-      onHeaderCell: () => ({ style: FONT_STYLES.tableHeader }),
-      onCell: () => ({ style: FONT_STYLES.tableBody })
+      onHeaderCell: () => ({ style: { ...FONT_STYLES.tableHeader, fontSize: '14px', fontWeight: '700' } }),
+      onCell: () => ({ style: { ...FONT_STYLES.tableBody, fontSize: '14px', fontWeight: '500' } })
     },
     {
       title: 'Spec. Failure Rate',
       dataIndex: 'specFailureRate',
       key: 'specFailureRate',
       sorter: (a, b) => a.specFailureRate - b.specFailureRate,
-      onHeaderCell: () => ({ style: FONT_STYLES.tableHeader }),
+      onHeaderCell: () => ({ style: { ...FONT_STYLES.tableHeader, fontSize: '14px', fontWeight: '700' } }),
       render: (rate, record) => (
-        <div style={FONT_STYLES.tableBody}>
-          <span style={{ fontWeight: '500' }}>
+        <div style={{ ...FONT_STYLES.tableBody, fontSize: '13px' }}>
+          <span style={{ fontWeight: '600', fontSize: '13px' }}>
             <span style={{ 
               backgroundColor: 'rgba(255, 107, 107, 0.15)', 
-              padding: '2px 6px', 
+              padding: '3px 8px', 
               borderRadius: '3px',
-              color: '#ff6b6b'
+              color: '#ff6b6b',
+              fontWeight: '600',
+              fontSize: '13px'
             }}>
               {record.specSNCount || 0}F
             </span>
-            /{record.totalSamples}T
+            <span style={{ marginLeft: '4px', fontWeight: '500' }}>/{record.totalSamples}T</span>
           </span>
           <br/>
-          <span style={{ ...FONT_STYLES.tableBody, color: '#999', fontSize: '11px' }}>
+          <span style={{ ...FONT_STYLES.tableBody, color: '#666', fontSize: '12px', fontWeight: '500', marginTop: '4px', display: 'inline-block' }}>
             Strife: 
             <span style={{ 
               backgroundColor: 'rgba(255, 193, 7, 0.15)', 
-              padding: '2px 4px', 
+              padding: '2px 6px', 
               borderRadius: '3px',
-              color: '#ffc107'
+              marginLeft: '4px',
+              color: '#ffc107',
+              fontWeight: '600',
+              fontSize: '12px'
             }}>
               {record.strifeSNCount || 0}SF
             </span>
-            /{record.totalSamples}T
+            <span style={{ marginLeft: '4px' }}>/{record.totalSamples}T</span>
           </span>
         </div>
       ),

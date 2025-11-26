@@ -840,7 +840,204 @@ async function generateMatrixReport(projectId, filters = {}) {
   }
 }
 
+/**
+ * Generate Cross Analysis Excel report
+ * @param {string} projectId - Project ID
+ * @param {string} dimension1 - First dimension
+ * @param {string} dimension2 - Second dimension
+ * @param {object} filters - Filter parameters
+ * @returns {Promise<Buffer>} - Excel file buffer
+ */
+async function generateCrossAnalysisReport(projectId, dimension1, dimension2, filters = {}) {
+  try {
+    // Get project data
+    const { getDatabase } = require('../models/database');
+    const db = getDatabase();
+    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId);
+    
+    if (!project) {
+      throw new Error('Project not found');
+    }
+
+    // Get cross analysis data
+    const crossAnalysisData = await analysisModel.getCrossAnalysis(projectId, dimension1, dimension2, filters);
+    const filterStatistics = await analysisModel.getFilterStatistics(projectId, filters, false);
+
+    // Create workbook
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Issue Analyzer System';
+    workbook.created = new Date();
+
+    // ==================== Sheet 1: Summary ====================
+    const summarySheet = workbook.addWorksheet('分析摘要');
+
+    // Title
+    summarySheet.mergeCells('A1:F1');
+    const titleCell = summarySheet.getCell('A1');
+    titleCell.value = `${project.name} - 交叉分析报告 (${crossAnalysisData.dimension1} × ${crossAnalysisData.dimension2})`;
+    titleCell.font = { size: 16, bold: true };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    summarySheet.getRow(1).height = 30;
+
+    // Project info
+    summarySheet.getCell('A3').value = '项目名称:';
+    summarySheet.getCell('B3').value = project.name;
+    summarySheet.getCell('A4').value = '分析维度:';
+    summarySheet.getCell('B4').value = `${crossAnalysisData.dimension1} × ${crossAnalysisData.dimension2}`;
+    summarySheet.getCell('A5').value = '导出时间:';
+    summarySheet.getCell('B5').value = new Date().toLocaleString('zh-CN');
+    
+    // Apply filters info
+    if (filters && Object.keys(filters).length > 0) {
+      summarySheet.getCell('A6').value = '筛选条件:';
+      let row = 6;
+      for (const [key, value] of Object.entries(filters)) {
+        if (['page', 'limit', 'sort_by', 'sort_order'].includes(key)) continue;
+        summarySheet.getCell(`B${row}`).value = `${key}: ${value}`;
+        row++;
+      }
+    }
+
+    // Statistics summary
+    const statsStartRow = 9;
+    summarySheet.getCell(`A${statsStartRow}`).value = '统计概览';
+    summarySheet.getCell(`A${statsStartRow}`).font = { size: 14, bold: true };
+    
+    const stats = [
+      ['总 Issue 数', filterStatistics.totalCount || 0],
+      ['Spec 问题数', filterStatistics.specCount || 0],
+      ['Strife 问题数', filterStatistics.strifeCount || 0],
+      ['独立 WF 数', filterStatistics.uniqueWFs || 0],
+      ['独立 Config 数', filterStatistics.uniqueConfigs || 0],
+      ['独立 Symptom 数', filterStatistics.uniqueSymptoms || 0],
+      ['总样本量', filterStatistics.totalSamples || 0]
+    ];
+
+    stats.forEach((stat, idx) => {
+      const row = statsStartRow + 2 + idx;
+      summarySheet.getCell(`A${row}`).value = stat[0];
+      summarySheet.getCell(`B${row}`).value = stat[1];
+      summarySheet.getCell(`A${row}`).font = { bold: true };
+    });
+
+    // Set column widths
+    summarySheet.getColumn(1).width = 20;
+    summarySheet.getColumn(2).width = 30;
+
+    // ==================== Sheet 2: Cross Analysis Matrix ====================
+    const matrixSheet = workbook.addWorksheet('交叉分析矩阵');
+
+    // Build header row: first cell is empty, then dimension2 values
+    const headerRow = [''];
+    const dim2Values = Array.from(crossAnalysisData.dimension2Values || []);
+    dim2Values.forEach(val => headerRow.push(val));
+
+    const headerRowObj = matrixSheet.addRow(headerRow);
+    headerRowObj.font = { bold: true, size: 12 };
+    headerRowObj.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
+    headerRowObj.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    // Build data rows
+    const dim1Values = Array.from(crossAnalysisData.dimension1Values || []).sort();
+    const matrix = crossAnalysisData.matrix || [];
+
+    dim1Values.forEach(dim1Val => {
+      const rowData = [dim1Val];
+      
+      dim2Values.forEach(dim2Val => {
+        // Find matching cell in matrix
+        const cell = matrix.find(
+          c => c.dimension1Value === dim1Val && c.dimension2Value === dim2Val
+        );
+        
+        if (cell) {
+          rowData.push(`${cell.specCount}F/${cell.totalSamples}T`);
+        } else {
+          rowData.push('N/A');
+        }
+      });
+
+      const dataRow = matrixSheet.addRow(rowData);
+      dataRow.alignment = { horizontal: 'center', vertical: 'middle' };
+      dataRow.font = { size: 11 };
+    });
+
+    // Set column widths
+    matrixSheet.getColumn(1).width = 25;
+    dim2Values.forEach((_, idx) => {
+      matrixSheet.getColumn(idx + 2).width = 20;
+    });
+
+    // Add borders to all cells
+    const totalRows = matrixSheet.rowCount;
+    const totalCols = headerRow.length;
+    for (let row = 1; row <= totalRows; row++) {
+      for (let col = 1; col <= totalCols; col++) {
+        const cell = matrixSheet.getCell(row, col);
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      }
+    }
+
+    // ==================== Sheet 3: Detailed Matrix Data ====================
+    const detailSheet = workbook.addWorksheet('详细数据');
+
+    detailSheet.columns = [
+      { header: `${dimension1}`, key: 'dimension1', width: 25 },
+      { header: `${dimension2}`, key: 'dimension2', width: 25 },
+      { header: 'Spec 失败数', key: 'specCount', width: 15 },
+      { header: 'Strife 失败数', key: 'strifeCount', width: 15 },
+      { header: '样本总数', key: 'totalSamples', width: 15 },
+      { header: 'Spec 失败率 (F/T)', key: 'specFailureRate', width: 20 },
+      { header: '总失败率 (F/T)', key: 'totalFailureRate', width: 20 }
+    ];
+
+    detailSheet.getRow(1).font = { bold: true };
+    detailSheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
+
+    // Add matrix data sorted by dimension1 then dimension2
+    const sortedMatrix = (matrix || []).sort((a, b) => {
+      if (a.dimension1Value !== b.dimension1Value) {
+        return String(a.dimension1Value).localeCompare(String(b.dimension1Value));
+      }
+      return String(a.dimension2Value).localeCompare(String(b.dimension2Value));
+    });
+
+    sortedMatrix.forEach(cell => {
+      detailSheet.addRow({
+        dimension1: cell.dimension1Value,
+        dimension2: cell.dimension2Value,
+        specCount: cell.specCount || 0,
+        strifeCount: cell.strifeCount || 0,
+        totalSamples: cell.totalSamples || 0,
+        specFailureRate: `${cell.specCount || 0}F/${cell.totalSamples || 0}T`,
+        totalFailureRate: `${(cell.specCount || 0) + (cell.strifeCount || 0)}F/${cell.totalSamples || 0}T`
+      });
+    });
+
+    // Generate buffer
+    const buffer = await workbook.xlsx.writeBuffer();
+    return buffer;
+  } catch (error) {
+    console.error('Error generating cross analysis report:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   generateExcelReport,
-  generateMatrixReport
+  generateMatrixReport,
+  generateCrossAnalysisReport
 };

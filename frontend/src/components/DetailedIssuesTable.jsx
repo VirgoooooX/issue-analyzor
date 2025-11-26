@@ -7,8 +7,19 @@ import ColumnSelector from './ColumnSelector';
 const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
   const { issues, loadIssues, filters, filterResults, filterContext, loadFilterResults } = useStore();
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
-  // 默认隐藏列：root_cause 和 owner
-  const [visibleColumns, setVisibleColumns] = useState(['root_cause', 'owner']);
+  // 初始化时从 localStorage 读取用户选择的列，如果没有则默认显示所有列
+  const [visibleColumns, setVisibleColumns] = useState(() => {
+    const saved = localStorage.getItem('issueTableColumns');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse saved columns:', e);
+      }
+    }
+    // 默认显示所有列除了固定列
+    return undefined; // undefined 表示显示所有列
+  });
 
   // 根据是否使用筛选结果选择数据源
   const dataSource = useFilterResults ? filterResults : issues;
@@ -278,7 +289,7 @@ const DetailedIssuesTable = ({ projectId, useFilterResults = false }) => {
       }
     >
       <Table
-        columns={visibleColumns.length > 0 ? columns.filter(col => visibleColumns.includes(col.key) || col.key === 'action') : columns}
+        columns={visibleColumns ? columns.filter(col => visibleColumns.includes(col.key) || col.key === 'action') : columns}
         dataSource={dataSource.data || dataSource.issues}
         loading={dataSource.loading}
         rowKey="id"

@@ -16,12 +16,18 @@ const ColumnSelector = ({ columns, visibleColumns, onColumnsChange }) => {
         onColumnsChange?.(parsed);
       } catch (e) {
         console.error('Failed to parse saved columns:', e);
+        // Fallback: use all columns
+        const allColumns = columns.map(col => col.key);
+        setSelectedColumns(allColumns);
+        onColumnsChange?.(allColumns);
       }
     } else {
-      // Use default visible columns
-      setSelectedColumns(columns.map(col => col.key));
+      // Use default: all columns
+      const allColumns = columns.map(col => col.key);
+      setSelectedColumns(allColumns);
+      onColumnsChange?.(allColumns);
     }
-  }, []);
+  }, [columns, onColumnsChange]);
 
   const handleColumnChange = (checkedValues) => {
     setSelectedColumns(checkedValues);

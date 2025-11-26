@@ -27,9 +27,13 @@ function FilterPanel() {
   const { filters, filterOptions, projects, setFilter, resetFilters, loadFilterOptions, applyFilters } = useStore();
   const [localFilters, setLocalFilters] = useState({});
   const [isInitialized, setIsInitialized] = useState(false);
+  // 管理每个 Select 的展开状态
+  const [openSelects, setOpenSelects] = useState({});
+  // 临时保存用户在 Select 中的选择，只在关闭时才更新到 localFilters
+  const [tempSelects, setTempSelects] = useState({});
 
   const currentProject = projects.current;
-  const currentProjectId = currentProject?.id; // Store ID separately to avoid reference issues
+  const currentProjectId = currentProject?.id;
   const options = filterOptions.data;
   const loading = filterOptions.loading;
 
@@ -39,40 +43,39 @@ function FilterPanel() {
       loadFilterOptions(currentProjectId);
       setIsInitialized(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentProjectId]);
+  }, [currentProjectId, isInitialized]);
 
   // Reload filter options when local filters change (级联筛选)
-  // 实时更新其他筛选器的选项，但每个筛选器查询时会排除自己的条件
-  // DISABLED - causing infinite loop
-  /*
   useEffect(() => {
-    if (currentProjectId && isInitialized) {
-      // 只传递有值的筛选条件
-      const activeFilters = {};
-      Object.keys(localFilters).forEach(key => {
-        const value = localFilters[key];
-        if (Array.isArray(value) && value.length > 0) {
-          activeFilters[key] = value;
-        } else if (value && !Array.isArray(value) && value !== '') {
-          activeFilters[key] = value;
+    const timer = setTimeout(() => {
+      if (currentProjectId && isInitialized) {
+        const activeFilters = {};
+        Object.keys(localFilters).forEach(key => {
+          const value = localFilters[key];
+          if (Array.isArray(value) && value.length > 0) {
+            activeFilters[key] = value;
+          } else if (value && !Array.isArray(value) && value !== '') {
+            activeFilters[key] = value;
+          }
+        });
+        if (Object.keys(activeFilters).length > 0) {
+          loadFilterOptions(currentProjectId, activeFilters);
         }
-      });
-      loadFilterOptions(currentProjectId, activeFilters);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localFilters, currentProjectId]);
-  */
+      }
+    }, 500);
 
-  // Initialize local filters from store - only on mount
+    return () => clearTimeout(timer);
+  }, [localFilters, currentProjectId, isInitialized]);
+
+  // Initialize local filters from store
   useEffect(() => {
     setLocalFilters(filters);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty dependency array - only run on mount
+  }, []);
 
   const handleFilterChange = (key, value) => {
-    setLocalFilters({
-      ...localFilters,
+    // 在 Select 打开时，保存到临时状态，不更新 localFilters
+    setTempSelects({
+      ...tempSelects,
       [key]: value,
     });
   };
@@ -81,9 +84,7 @@ function FilterPanel() {
     Object.keys(localFilters).forEach((key) => {
       setFilter(key, localFilters[key]);
     });
-    // 跳转到筛选结果页面
     applyFilters();
-    // Encode filters and navigate to filter results page
     const filtersEncoded = btoa(JSON.stringify(localFilters));
     navigate(`/filter-results?filters=${filtersEncoded}&project=${currentProject.id}`);
   };
@@ -111,17 +112,49 @@ function FilterPanel() {
     });
   };
 
+  const handleSelectOpen = (key, open) => {
+    setOpenSelects(prev => ({
+      ...prev,
+      [key]: open
+    }));
+    
+    if (open) {
+      // 打开 Select 时，从 localFilters 复制到临时状态
+      setTempSelects({
+        ...tempSelects,
+        [key]: localFilters[key],
+      });
+    } else {
+      // 关闭 Select 时，把临时状态更新到 localFilters
+      setLocalFilters({
+        ...localFilters,
+        [key]: tempSelects[key],
+      });
+      // 清除这个 key 的临时状态
+      const newTempSelects = { ...tempSelects };
+      delete newTempSelects[key];
+      setTempSelects(newTempSelects);
+    }
+  };
+
   const handleRemoveTag = (key, value) => {
     if (Array.isArray(localFilters[key])) {
       const newValue = localFilters[key].filter((v) => v !== value);
-      handleFilterChange(key, newValue);
+      setLocalFilters({
+        ...localFilters,
+        [key]: newValue,
+      });
       setFilter(key, newValue);
     } else {
-      handleFilterChange(key, '');
+      setLocalFilters({
+        ...localFilters,
+        [key]: '',
+      });
       setFilter(key, '');
     }
   };
 
+  // 显示所有已有的标签（来自 localFilters）
   const getActiveTags = () => {
     const tags = [];
     
@@ -164,10 +197,6 @@ function FilterPanel() {
     if (localFilters.unit_number) {
       tags.push({ key: 'unit_number', label: `Unit#: ${localFilters.unit_number}` });
     }
-    
-    if (localFilters.sn) {
-      tags.push({ key: 'sn', label: `SN: ${localFilters.sn}` });
-    }
 
     return tags;
   };
@@ -188,14 +217,11 @@ function FilterPanel() {
 
   return (
     <div style={{ width: '300px', height: '100%', display: 'flex', flexDirection: 'column', borderRight: '1px solid #f0f0f0' }}>
-      {/* Header */}
-      <div style={{ padding: '16px 12px 12px 12px', borderBottom: '1px solid #f0f0f0', background: '#fafafa' }}>
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+      <div style={{ padding: '16px 12px 12px 12px', borderBottom: '1px solid #f0f0f0', background: '#fafafa', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div style={{ fontSize: '16px', fontWeight: '600', color: '#262626' }}>
             <FilterOutlined style={{ marginRight: '8px' }} /> 数据筛选
           </div>
           
-          {/* SN Search */}
           <Input
             placeholder="搜索SN"
             prefix={<SearchOutlined />}
@@ -204,7 +230,6 @@ function FilterPanel() {
             allowClear
           />
 
-          {/* Action Buttons - 移到顶部 */}
           <Space style={{ width: '100%' }} size="small">
             <Button
               type="primary"
@@ -223,15 +248,16 @@ function FilterPanel() {
             </Button>
           </Space>
 
-          {/* Active Filter Tags */}
           {getActiveTags().length > 0 && (
             <div style={{ 
               maxHeight: '120px', 
+              minHeight: '50px',
               overflowY: 'auto',
               padding: '8px',
               background: '#fff',
               borderRadius: '4px',
-              border: '1px solid #e8e8e8'
+              border: '1px solid #e8e8e8',
+              flexShrink: 0
             }}>
               {getActiveTags().map((tag, index) => (
                 <Tag
@@ -246,13 +272,10 @@ function FilterPanel() {
               ))}
             </div>
           )}
-        </Space>
       </div>
 
-      {/* Filters */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          {/* Failure Symptom - 最重要 */}
           <div>
             <div style={{ marginBottom: '8px', fontWeight: 600, color: '#1890ff', fontSize: '13px' }}>Failure Symptom</div>
             <Select
@@ -260,8 +283,10 @@ function FilterPanel() {
               showSearch
               style={{ width: '100%' }}
               placeholder="选择失败症状"
-              value={localFilters.symptoms}
+              value={openSelects.symptoms ? (tempSelects.symptoms || []) : localFilters.symptoms}
               onChange={(value) => handleFilterChange('symptoms', value)}
+              onOpenChange={(open) => handleSelectOpen('symptoms', open)}
+              open={openSelects.symptoms}
               options={options.symptoms.map((s) => ({ label: s, value: s }))}
               maxTagCount="responsive"
               filterOption={(input, option) =>
@@ -270,7 +295,6 @@ function FilterPanel() {
             />
           </div>
 
-          {/* Failed Location - 提高优先级 */}
           <div>
             <div style={{ marginBottom: '8px', fontWeight: 600, color: '#fa8c16', fontSize: '13px' }}>Failed Location</div>
             <Select
@@ -278,8 +302,10 @@ function FilterPanel() {
               showSearch
               style={{ width: '100%' }}
               placeholder="选择位置"
-              value={localFilters.failed_locations}
+              value={openSelects.failed_locations ? (tempSelects.failed_locations || []) : localFilters.failed_locations}
               onChange={(value) => handleFilterChange('failed_locations', value)}
+              onOpenChange={(open) => handleSelectOpen('failed_locations', open)}
+              open={openSelects.failed_locations}
               options={options.failedLocations.map((l) => ({ label: l, value: l }))}
               maxTagCount="responsive"
               filterOption={(input, option) =>
@@ -288,7 +314,6 @@ function FilterPanel() {
             />
           </div>
 
-          {/* WF */}
           <div>
             <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>WF</div>
             <Select
@@ -296,8 +321,10 @@ function FilterPanel() {
               showSearch
               style={{ width: '100%' }}
               placeholder="选择WF"
-              value={localFilters.wfs}
+              value={openSelects.wfs ? (tempSelects.wfs || []) : localFilters.wfs}
               onChange={(value) => handleFilterChange('wfs', value)}
+              onOpenChange={(open) => handleSelectOpen('wfs', open)}
+              open={openSelects.wfs}
               options={options.wfs.map((w) => ({ label: w, value: w }))}
               maxTagCount="responsive"
               filterOption={(input, option) =>
@@ -306,7 +333,6 @@ function FilterPanel() {
             />
           </div>
 
-          {/* Failed Test */}
           <div>
             <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>Failed Test</div>
             <Select
@@ -314,8 +340,10 @@ function FilterPanel() {
               showSearch
               style={{ width: '100%' }}
               placeholder="选择测试项"
-              value={localFilters.failed_tests}
+              value={openSelects.failed_tests ? (tempSelects.failed_tests || []) : localFilters.failed_tests}
               onChange={(value) => handleFilterChange('failed_tests', value)}
+              onOpenChange={(open) => handleSelectOpen('failed_tests', open)}
+              open={openSelects.failed_tests}
               options={options.failedTests.map((t) => ({ label: t, value: t }))}
               maxTagCount="responsive"
               filterOption={(input, option) =>
@@ -324,7 +352,6 @@ function FilterPanel() {
             />
           </div>
 
-          {/* Config */}
           <div>
             <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>Config</div>
             <Select
@@ -332,8 +359,10 @@ function FilterPanel() {
               showSearch
               style={{ width: '100%' }}
               placeholder="选择Config"
-              value={localFilters.configs}
+              value={openSelects.configs ? (tempSelects.configs || []) : localFilters.configs}
               onChange={(value) => handleFilterChange('configs', value)}
+              onOpenChange={(open) => handleSelectOpen('configs', open)}
+              open={openSelects.configs}
               options={options.configs.map((c) => ({ label: c, value: c }))}
               maxTagCount="responsive"
               filterOption={(input, option) =>
@@ -342,21 +371,21 @@ function FilterPanel() {
             />
           </div>
 
-          {/* FA Status */}
           <div>
             <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>FA Status</div>
             <Select
               mode="multiple"
               style={{ width: '100%' }}
               placeholder="选择FA状态"
-              value={localFilters.fa_statuses}
+              value={openSelects.fa_statuses ? (tempSelects.fa_statuses || []) : localFilters.fa_statuses}
               onChange={(value) => handleFilterChange('fa_statuses', value)}
+              onOpenChange={(open) => handleSelectOpen('fa_statuses', open)}
+              open={openSelects.fa_statuses}
               options={options.faStatuses.map((s) => ({ label: s, value: s }))}
               maxTagCount="responsive"
             />
           </div>
 
-          {/* Open Date */}
           <div>
             <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>Open Date</div>
             <RangePicker
@@ -385,63 +414,66 @@ function FilterPanel() {
             />
           </div>
 
-          {/* Failure Type */}
           <div>
             <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>Failure Type</div>
             <Select
               mode="multiple"
               style={{ width: '100%' }}
               placeholder="选择类型"
-              value={localFilters.failure_types}
+              value={openSelects.failure_types ? (tempSelects.failure_types || []) : localFilters.failure_types}
               onChange={(value) => handleFilterChange('failure_types', value)}
+              onOpenChange={(open) => handleSelectOpen('failure_types', open)}
+              open={openSelects.failure_types}
               options={options.failureTypes.map((t) => ({ label: t, value: t }))}
               maxTagCount="responsive"
             />
           </div>
 
-          {/* Function or Cosmetic */}
           <div>
             <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>Function or Cosmetic</div>
             <Select
               mode="multiple"
               style={{ width: '100%' }}
               placeholder="选择分类"
-              value={localFilters.function_cosmetic}
+              value={openSelects.function_cosmetic ? (tempSelects.function_cosmetic || []) : localFilters.function_cosmetic}
               onChange={(value) => handleFilterChange('function_cosmetic', value)}
+              onOpenChange={(open) => handleSelectOpen('function_cosmetic', open)}
+              open={openSelects.function_cosmetic}
               options={options.functionCosmetic.map((f) => ({ label: f, value: f }))}
               maxTagCount="responsive"
             />
           </div>
 
-          {/* Sample Status */}
           <div>
             <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>Sample Status</div>
             <Select
               mode="multiple"
               style={{ width: '100%' }}
               placeholder="选择样本状态"
-              value={localFilters.sample_statuses}
+              value={openSelects.sample_statuses ? (tempSelects.sample_statuses || []) : localFilters.sample_statuses}
               onChange={(value) => handleFilterChange('sample_statuses', value)}
+              onOpenChange={(open) => handleSelectOpen('sample_statuses', open)}
+              open={openSelects.sample_statuses}
               options={options.sampleStatuses.map((s) => ({ label: s, value: s }))}
               maxTagCount="responsive"
             />
           </div>
 
-          {/* Department */}
           <div>
             <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>Department</div>
             <Select
               mode="multiple"
               style={{ width: '100%' }}
               placeholder="选择部门"
-              value={localFilters.departments}
+              value={openSelects.departments ? (tempSelects.departments || []) : localFilters.departments}
               onChange={(value) => handleFilterChange('departments', value)}
+              onOpenChange={(open) => handleSelectOpen('departments', open)}
+              open={openSelects.departments}
               options={options.departments.map((d) => ({ label: d, value: d }))}
               maxTagCount="responsive"
             />
           </div>
 
-          {/* Unit# */}
           <div>
             <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>Unit#</div>
             <Input
@@ -452,7 +484,6 @@ function FilterPanel() {
             />
           </div>
 
-          {/* FA# */}
           <div>
             <div style={{ marginBottom: '8px', fontWeight: 500, fontSize: '13px' }}>FA#</div>
             <Input

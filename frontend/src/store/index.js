@@ -237,7 +237,7 @@ const useStore = create((set, get) => ({
   },
 
   async loadFilterOptions(projectId, currentFilters = {}) {
-    set({ filterOptions: { ...get().filterOptions, loading: true, error: null } });
+    // 不设置 loading，避免页面闪烁
     try {
       const response = await projectService.getFilterOptions(projectId, currentFilters);
       set({

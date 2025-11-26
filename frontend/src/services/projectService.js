@@ -91,4 +91,13 @@ export const projectService = {
     });
     return response;
   },
+
+  // Export Cross Analysis to Excel
+  async exportCrossAnalysis(projectId, dimension1, dimension2, filters = {}) {
+    const response = await apiClient.get(`/projects/${projectId}/export/cross`, {
+      params: { dimension1, dimension2, ...filters },
+      responseType: 'blob',
+    });
+    return response;
+  },
 };

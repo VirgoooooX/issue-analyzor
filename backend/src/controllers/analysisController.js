@@ -315,6 +315,55 @@ async function exportMatrix(req, res, next) {
   }
 }
 
+/**
+ * Export cross analysis as Excel
+ */
+async function exportCrossAnalysis(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { dimension1, dimension2, ...filters } = req.query;
+
+    if (!dimension1 || !dimension2) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameters: dimension1 and dimension2',
+      });
+    }
+
+    console.log(`📊 Generating Cross Analysis report for project ${id}: ${dimension1} × ${dimension2}...`);
+    const buffer = await exportService.generateCrossAnalysisReport(id, dimension1, dimension2, filters);
+
+    const { getDatabase } = require('../models/database');
+    const db = getDatabase();
+    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
+    
+    // Generate filename
+    let filename = `${project.name}_CrossAnalysis_${dimension1}_${dimension2}`;
+    
+    // Add filter indicators to filename
+    const filterParts = [];
+    if (filters.symptoms) filterParts.push('Symptom');
+    if (filters.wfs) filterParts.push('WF');
+    if (filters.configs) filterParts.push('Config');
+    if (filters.failed_tests) filterParts.push('Test');
+    if (filters.date_from || filters.date_to) filterParts.push('Date');
+    
+    if (filterParts.length > 0) {
+      filename += `_Filtered_${filterParts.join('_')}`;
+    }
+    
+    filename += `_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+    res.send(buffer);
+    console.log(`✅ Cross Analysis report generated successfully`);
+  } catch (error) {
+    console.error('Error exporting cross analysis:', error);
+    next(error);
+  }
+}
+
 module.exports = {
   getIssues,
   getFilterOptions,
@@ -326,4 +375,5 @@ module.exports = {
   getFailureRateMatrix,
   exportExcel,
   exportMatrix,
+  exportCrossAnalysis,
 };
