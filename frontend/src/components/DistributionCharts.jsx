@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { Card, Row, Col, Spin } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import * as echarts from 'echarts';
@@ -36,39 +36,32 @@ const DistributionCharts = ({ failureTypeStats, functionCosmeticStats, faStatusS
     if (failureTypeStats && failureTypeStats.length > 0) {
       renderFailureTypeChart();
     }
-    return () => {
-      if (failureTypeChartRef.current) {
-        echarts.getInstanceByDom(failureTypeChartRef.current)?.dispose();
-      }
-    };
   }, [failureTypeStats]);
 
   useEffect(() => {
     if (functionCosmeticStats && functionCosmeticStats.length > 0) {
       renderFunctionCosmeticChart();
     }
-    return () => {
-      if (functionCosmeticChartRef.current) {
-        echarts.getInstanceByDom(functionCosmeticChartRef.current)?.dispose();
-      }
-    };
   }, [functionCosmeticStats]);
 
   useEffect(() => {
     if (faStatusStats && faStatusStats.length > 0) {
       renderFAStatusChart();
     }
-    return () => {
-      if (faStatusChartRef.current) {
-        echarts.getInstanceByDom(faStatusChartRef.current)?.dispose();
-      }
-    };
   }, [faStatusStats]);
 
   const renderFailureTypeChart = () => {
     if (!failureTypeChartRef.current) return;
 
-    const chart = echarts.init(failureTypeChartRef.current);
+    // 获取已存在的实例，或创建新实例
+    let chart = echarts.getInstanceByDom(failureTypeChartRef.current);
+    const isNewInstance = !chart;
+    if (!chart) {
+      console.log('[失败类型] 创建新实例');
+      chart = echarts.init(failureTypeChartRef.current);
+    } else {
+      console.log('[失败类型] 使用存在的实例');
+    }
     
     const colorMap = {
       'Spec.': '#1890ff',
@@ -124,7 +117,7 @@ const DistributionCharts = ({ failureTypeStats, functionCosmeticStats, faStatusS
       ],
     };
 
-    chart.setOption(option);
+    chart.setOption(option, { merge: true });
 
     // Handle click event
     chart.on('click', (params) => {
@@ -148,7 +141,15 @@ const DistributionCharts = ({ failureTypeStats, functionCosmeticStats, faStatusS
   const renderFunctionCosmeticChart = () => {
     if (!functionCosmeticChartRef.current) return;
 
-    const chart = echarts.init(functionCosmeticChartRef.current);
+    // 获取已存在的实例，或创建新实例
+    let chart = echarts.getInstanceByDom(functionCosmeticChartRef.current);
+    const isNewInstance = !chart;
+    if (!chart) {
+      console.log('[功能性/外观性] 创建新实例');
+      chart = echarts.init(functionCosmeticChartRef.current);
+    } else {
+      console.log('[功能性/外观性] 使用存在的实例');
+    }
     
     const colorMap = {
       'Function': '#52c41a',
@@ -204,7 +205,7 @@ const DistributionCharts = ({ failureTypeStats, functionCosmeticStats, faStatusS
       ],
     };
 
-    chart.setOption(option);
+    chart.setOption(option, { merge: true });
 
     // Handle click event
     chart.on('click', (params) => {
@@ -228,7 +229,15 @@ const DistributionCharts = ({ failureTypeStats, functionCosmeticStats, faStatusS
   const renderFAStatusChart = () => {
     if (!faStatusChartRef.current) return;
 
-    const chart = echarts.init(faStatusChartRef.current);
+    // 获取已存在的实例，或创建新实例
+    let chart = echarts.getInstanceByDom(faStatusChartRef.current);
+    const isNewInstance = !chart;
+    if (!chart) {
+      console.log('[FA Status] 创建新实例');
+      chart = echarts.init(faStatusChartRef.current);
+    } else {
+      console.log('[FA Status] 使用存在的实例');
+    }
 
     const option = {
       title: {
@@ -275,7 +284,7 @@ const DistributionCharts = ({ failureTypeStats, functionCosmeticStats, faStatusS
       ],
     };
 
-    chart.setOption(option);
+    chart.setOption(option, { merge: true });
 
     // Handle click event
     chart.on('click', (params) => {

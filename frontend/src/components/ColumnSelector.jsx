@@ -7,31 +7,8 @@ const ColumnSelector = ({ columns, visibleColumns, onColumnsChange }) => {
   const [selectedColumns, setSelectedColumns] = useState(visibleColumns || []);
 
   useEffect(() => {
-    // Load saved column configuration from localStorage
-    const savedColumns = localStorage.getItem('issueTableColumns');
-    if (savedColumns) {
-      try {
-        const parsed = JSON.parse(savedColumns);
-        setSelectedColumns(parsed);
-        onColumnsChange?.(parsed);
-      } catch (e) {
-        console.error('Failed to parse saved columns:', e);
-        // Fallback: use all columns
-        const allColumns = columns.map(col => col.key);
-        setSelectedColumns(allColumns);
-        onColumnsChange?.(allColumns);
-      }
-    } else {
-      // Use default: all columns
-      const allColumns = columns.map(col => col.key);
-      setSelectedColumns(allColumns);
-      onColumnsChange?.(allColumns);
-    }
+    // ... existing code ...
   }, [columns, onColumnsChange]);
-
-  const handleColumnChange = (checkedValues) => {
-    setSelectedColumns(checkedValues);
-  };
 
   const handleApply = () => {
     // Save to localStorage
@@ -101,28 +78,29 @@ const ColumnSelector = ({ columns, visibleColumns, onColumnsChange }) => {
 
           <Divider style={{ margin: '12px 0' }} />
 
-          <Checkbox.Group
-            value={selectedColumns}
-            onChange={handleColumnChange}
-            style={{ width: '100%' }}
-          >
-            <Space direction="vertical" style={{ width: '100%' }}>
-              {columns.map((col) => (
-                <Checkbox
-                  key={col.key}
-                  value={col.key}
-                  disabled={col.fixed === 'left' || col.key === 'action'}
-                >
-                  {col.title}
-                  {col.fixed && (
-                    <span style={{ color: '#999', fontSize: '12px', marginLeft: '8px' }}>
-                      (固定列)
-                    </span>
-                  )}
-                </Checkbox>
-              ))}
-            </Space>
-          </Checkbox.Group>
+          <Space direction="vertical" style={{ width: '100%' }}>
+            {columns.map((col) => (
+              <Checkbox
+                key={col.key}
+                checked={selectedColumns.includes(col.key)}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedColumns([...selectedColumns, col.key]);
+                  } else {
+                    setSelectedColumns(selectedColumns.filter(k => k !== col.key));
+                  }
+                }}
+                disabled={col.fixed === 'left' || col.key === 'action'}
+              >
+                {col.title}
+                {col.fixed && (
+                  <span style={{ color: '#999', fontSize: '12px', marginLeft: '8px' }}>
+                    (固定列)
+                  </span>
+                )}
+              </Checkbox>
+            ))}
+          </Space>
         </Space>
       </Drawer>
     </>

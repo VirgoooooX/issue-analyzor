@@ -281,7 +281,7 @@ class AnalysisModel {
     
     const { whereClause: wfsWhere, params: wfsParams } = buildWhereClause('wf');
     const wfs = db.prepare(
-      `SELECT DISTINCT wf FROM issues WHERE ${wfsWhere} AND wf IS NOT NULL AND wf != '' ORDER BY wf`
+      `SELECT DISTINCT wf FROM issues WHERE ${wfsWhere} AND wf IS NOT NULL AND wf != '' ORDER BY CAST(wf AS INTEGER), wf`
     ).all(...wfsParams);
     
     const { whereClause: configsWhere, params: configsParams } = buildWhereClause('config');
@@ -405,13 +405,13 @@ class AnalysisModel {
 
   /**
    * Get cross analysis data (dimension1 × dimension2)
-   * Supports dimensions: symptom, config, wf, failed_test
+   * Supports dimensions: symptom, config, wf, failed_test, failed_location
    */
   async getCrossAnalysis(projectId, dimension1, dimension2, filters = {}) {
     // Validate dimensions
-    const validDimensions = ['symptom', 'config', 'wf', 'failed_test'];
+    const validDimensions = ['symptom', 'config', 'wf', 'failed_test', 'failed_location'];
     if (!validDimensions.includes(dimension1) || !validDimensions.includes(dimension2)) {
-      throw new Error('Invalid dimension. Allowed: symptom, config, wf, failed_test');
+      throw new Error('Invalid dimension. Allowed: symptom, config, wf, failed_test, failed_location');
     }
     
     if (dimension1 === dimension2) {
@@ -437,12 +437,25 @@ class AnalysisModel {
       dimension2Values.add(cell.dimension2Value);
     });
 
+    // 排序函数：如果是 WF 维度则按数字升序，否则按字母排序
+    const sortDimensionValues = (values, dimensionName) => {
+      const valuesArray = Array.from(values);
+      if (dimensionName === 'wf') {
+        return valuesArray.sort((a, b) => {
+          const numA = parseInt(a) || 0;
+          const numB = parseInt(b) || 0;
+          return numA - numB;
+        });
+      }
+      return valuesArray.sort();
+    };
+
     return {
       dimension1,
       dimension2,
       matrix,
-      dimension1Values: Array.from(dimension1Values).sort(),
-      dimension2Values: Array.from(dimension2Values).sort(),
+      dimension1Values: sortDimensionValues(dimension1Values, dimension1),
+      dimension2Values: sortDimensionValues(dimension2Values, dimension2),
     };
   }
 

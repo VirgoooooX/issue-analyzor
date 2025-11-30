@@ -80,6 +80,14 @@ function FilterPanel() {
     });
   };
 
+  // 用于输入框的处理函数，直接更新 localFilters
+  const handleInputChange = (key, value) => {
+    setLocalFilters({
+      ...localFilters,
+      [key]: value,
+    });
+  };
+
   const handleApplyFilters = () => {
     Object.keys(localFilters).forEach((key) => {
       setFilter(key, localFilters[key]);
@@ -226,7 +234,7 @@ function FilterPanel() {
             placeholder="搜索SN"
             prefix={<SearchOutlined />}
             value={localFilters.sn}
-            onChange={(e) => handleFilterChange('sn', e.target.value)}
+            onChange={(e) => handleInputChange('sn', e.target.value)}
             allowClear
           />
 
@@ -479,7 +487,7 @@ function FilterPanel() {
             <Input
               placeholder="输入Unit#"
               value={localFilters.unit_number}
-              onChange={(e) => handleFilterChange('unit_number', e.target.value)}
+              onChange={(e) => handleInputChange('unit_number', e.target.value)}
               allowClear
             />
           </div>
@@ -489,7 +497,7 @@ function FilterPanel() {
             <Input
               placeholder="输入FA#"
               value={localFilters.fa_search}
-              onChange={(e) => handleFilterChange('fa_search', e.target.value)}
+              onChange={(e) => handleInputChange('fa_search', e.target.value)}
               allowClear
             />
           </div>

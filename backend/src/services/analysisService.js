@@ -652,6 +652,15 @@ class AnalysisService {
     failed_tests = parseArrayParam(failed_tests);
     configs = parseArrayParam(configs);
 
+    // 维度名称映射到数据库字段名
+    const dimensionFieldMap = {
+      'symptom': 'symptom',
+      'config': 'config',
+      'wf': 'wf',
+      'failed_test': 'failed_test',
+      'failed_location': 'failed_location',
+    };
+
     // 确定需要计算的WF集合（考虑WF和Failed Test筛选）
     let targetWFs = new Set();
     
@@ -717,8 +726,8 @@ class AnalysisService {
 
     // Group by two dimensions
     issues.forEach((issue) => {
-      const dim1Value = issue[dimension1];
-      const dim2Value = issue[dimension2];
+      const dim1Value = issue[dimensionFieldMap[dimension1]];
+      const dim2Value = issue[dimensionFieldMap[dimension2]];
       
       if (!dim1Value || !dim2Value) return;
 
@@ -812,16 +821,16 @@ class AnalysisService {
       }
 
       // specCount 和 strifeCount 直接计数，不去重
-      const dim1Key = dimension1;
-      const dim2Key = dimension2;
+      const dim1FieldName = dimensionFieldMap[dimension1];
+      const dim2FieldName = dimensionFieldMap[dimension2];
       const specCount = issues.filter(i => 
-        i[dim1Key] === cell.dimension1Value && 
-        i[dim2Key] === cell.dimension2Value && 
+        i[dim1FieldName] === cell.dimension1Value && 
+        i[dim2FieldName] === cell.dimension2Value && 
         i.failure_type === 'Spec.'
       ).length;
       const strifeCount = issues.filter(i => 
-        i[dim1Key] === cell.dimension1Value && 
-        i[dim2Key] === cell.dimension2Value && 
+        i[dim1FieldName] === cell.dimension1Value && 
+        i[dim2FieldName] === cell.dimension2Value && 
         i.failure_type === 'Strife'
       ).length;
       const percentage = issues.length > 0 ? (cell.totalCount / issues.length) * 100 : 0;
@@ -1054,7 +1063,11 @@ class AnalysisService {
       uniqueConfigs: configsSet.size,
       uniqueSymptoms: symptomsSet.size,
       totalSamples: globalTotalSamples,
-      wfList: Array.from(wfsSet).sort(),
+      wfList: Array.from(wfsSet).sort((a, b) => {
+        const numA = parseInt(a) || 0;
+        const numB = parseInt(b) || 0;
+        return numA - numB;
+      }),
       configList: Array.from(configsSet).sort(),
       symptomDistribution,
       wfDistribution,

@@ -250,6 +250,7 @@ function AnalysisView({
       ...FONT_STYLES.chartTitle,
       left: 'center'
     },
+    animation: false,
     tooltip: { 
       trigger: 'axis', 
       axisPointer: { type: 'shadow' },
@@ -361,6 +362,7 @@ function AnalysisView({
       ...FONT_STYLES.chartTitle,
       left: 'center'
     },
+    animation: false,
     tooltip: { 
       trigger: 'axis', 
       axisPointer: { type: 'shadow' },
@@ -469,6 +471,7 @@ function AnalysisView({
       ...FONT_STYLES.chartTitle,
       left: 'center'
     },
+    animation: false,
     tooltip: { 
       trigger: 'axis', 
       axisPointer: { type: 'shadow' },
@@ -966,6 +969,7 @@ function AnalysisView({
                   <ReactECharts 
                     option={{
                       ...symptomChartOptions,
+                      animation: false,
                       series: symptomChartOptions?.series?.map(s => ({
                         ...s,
                         itemStyle: {
@@ -1004,6 +1008,7 @@ function AnalysisView({
               <ReactECharts 
                 option={{
                   ...wfChartOptions,
+                  animation: false,
                   series: wfChartOptions?.series?.map(s => ({
                     ...s,
                     itemStyle: {
@@ -1038,6 +1043,7 @@ function AnalysisView({
                   <ReactECharts 
                     option={{
                       ...testChartOptions,
+                      animation: false,
                       series: testChartOptions?.series?.map(s => ({
                         ...s,
                         itemStyle: {
@@ -1085,6 +1091,7 @@ function AnalysisView({
                     <Col span={14}>
                       <ReactECharts 
                         option={{
+                          animation: false,
                           tooltip: {
                             trigger: 'item',
                             formatter: '{b}: {c} ({d}%)'  

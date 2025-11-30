@@ -942,7 +942,17 @@ async function generateCrossAnalysisReport(projectId, dimension1, dimension2, fi
     headerRowObj.alignment = { horizontal: 'center', vertical: 'middle' };
 
     // Build data rows
-    const dim1Values = Array.from(crossAnalysisData.dimension1Values || []).sort();
+    const dim1Values = Array.from(crossAnalysisData.dimension1Values || []);
+    // 如果是 WF 维度则按数字升序，否则按字母排序
+    if (dimension1 === 'wf') {
+      dim1Values.sort((a, b) => {
+        const numA = parseInt(a) || 0;
+        const numB = parseInt(b) || 0;
+        return numA - numB;
+      });
+    } else {
+      dim1Values.sort();
+    }
     const matrix = crossAnalysisData.matrix || [];
 
     dim1Values.forEach(dim1Val => {
@@ -1009,10 +1019,23 @@ async function generateCrossAnalysisReport(projectId, dimension1, dimension2, fi
 
     // Add matrix data sorted by dimension1 then dimension2
     const sortedMatrix = (matrix || []).sort((a, b) => {
+      // 如果是 WF 维度则按数字升序，否则按字母排序
+      const compareValues = (aVal, bVal, dimensionName) => {
+        if (dimensionName === 'wf') {
+          const numA = parseInt(aVal) || 0;
+          const numB = parseInt(bVal) || 0;
+          if (numA !== numB) return numA - numB;
+        } else {
+          const cmp = String(aVal).localeCompare(String(bVal));
+          if (cmp !== 0) return cmp;
+        }
+        return 0;
+      };
+
       if (a.dimension1Value !== b.dimension1Value) {
-        return String(a.dimension1Value).localeCompare(String(b.dimension1Value));
+        return compareValues(a.dimension1Value, b.dimension1Value, dimension1);
       }
-      return String(a.dimension2Value).localeCompare(String(b.dimension2Value));
+      return compareValues(a.dimension2Value, b.dimension2Value, dimension2);
     });
 
     sortedMatrix.forEach(cell => {
