@@ -21,8 +21,11 @@ const storage = multer.diskStorage({
     }
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `upload-${uniqueSuffix}${path.extname(file.originalname)}`);
+    // 使用时间戳和版本号标识文件
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const randomSuffix = Math.round(Math.random() * 1e6);
+    const baseFileName = path.parse(file.originalname).name;
+    cb(null, `${baseFileName}_v${timestamp}_${randomSuffix}${path.extname(file.originalname)}`);
   },
 });
 
@@ -116,10 +119,21 @@ async function createProject(req, res, next) {
 
     uploadedFilePath = req.file.path;
     const fileName = req.file.originalname;
-    const projectName = req.body.name || path.parse(fileName).name;
+    const baseProjectName = req.body.name || path.parse(fileName).name;
     const uploader = req.body.uploader || null;
 
+    // 生成北京时间戳（UTC+8）
+    const now = new Date();
+    const beijingTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    const dateStr = beijingTime.toISOString().split('T')[0]; // YYYY-MM-DD
+    const timeStr = beijingTime.toISOString().split('T')[1].slice(0, 8); // HH:mm:ss
+    const versionTimestamp = `${dateStr} ${timeStr}`; // "2025-11-30 14:25:33"
+    
+    // 项目名称不包含时间戳，时间戳单独存储
+    const projectName = baseProjectName;
+
     console.log(`📄 Processing Excel file: ${fileName}`);
+    console.log(`📝 Project: ${projectName}, Upload time (Beijing): ${versionTimestamp}`);
 
     // Parse Excel file
     const { issues, sampleSizes, configNames, validationReport } = await parseExcelFile(uploadedFilePath);
@@ -135,6 +149,7 @@ async function createProject(req, res, next) {
       configNames,
       validationReport,
       totalIssues: issues.length,
+      uploadTime: versionTimestamp,  // 存储北京时间戳
     });
 
     console.log(`✅ Created project ID: ${projectId}`);
@@ -149,8 +164,9 @@ async function createProject(req, res, next) {
     await forceSaveDatabase();
     console.log(`💾 Database saved for project ${projectId}`);
 
-    // 清除该项目的缓存
+    // 清除该项目的所有缓存 - 防止用户看到旧数据
     cacheService.clearProjectCache(projectId);
+    console.log(`🗑️  All cache cleared for project ${projectId} to ensure fresh data`);
 
     // Clean up uploaded file
     await fs.unlink(uploadedFilePath);

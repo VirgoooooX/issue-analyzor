@@ -9,14 +9,14 @@ class ProjectModel {
    */
   async createProject(projectData) {
     const db = getDatabase();
-    const { name, fileName, uploader, configNames, validationReport, totalIssues } = projectData;
+    const { name, fileName, uploader, configNames, validationReport, totalIssues, uploadTime } = projectData;
 
     const stmt = db.prepare(
-      `INSERT INTO projects (name, file_name, uploader, config_names, validation_report, total_issues)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO projects (name, file_name, uploader, config_names, validation_report, total_issues, upload_time)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     );
     
-    const result = stmt.run(name, fileName, uploader, JSON.stringify(configNames), JSON.stringify(validationReport), totalIssues);
+    const result = stmt.run(name, fileName, uploader, JSON.stringify(configNames), JSON.stringify(validationReport), totalIssues, uploadTime);
 
     return result.lastInsertRowid;
   }

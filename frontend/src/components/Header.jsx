@@ -174,10 +174,28 @@ function Header() {
             value={current?.id}
             onChange={handleProjectChange}
             loading={loading}
-            style={{ width: 300 }}
+            style={{ width: 360 }}
+            optionLabelRender={(option) => {
+              const project = list.find(p => p.id === option.value);
+              if (!project) return option.label;
+              // 格式化显示：项目名 + 上传时间 + issue数量
+              const uploadTime = project.upload_time || '未知时间';
+              return (
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                  <span>{project.name}</span>
+                  <span style={{ marginLeft: '16px', color: '#999', fontSize: '12px' }}>({uploadTime}) {project.total_issues}📌</span>
+                </div>
+              );
+            }}
             options={list.map((p) => ({
-              label: `${p.name} (${p.total_issues} issues)`,
+              label: (
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                  <span>{p.name}</span>
+                  <span style={{ marginLeft: '16px', color: '#999', fontSize: '12px', whiteSpace: 'nowrap' }}>{p.upload_time}</span>
+                </div>
+              ),
               value: p.id,
+              title: `${p.name} - 上传于 ${p.upload_time}`,  // 鼠标悬停提示
             }))}
           />
 

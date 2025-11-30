@@ -126,6 +126,18 @@ const useStore = create((set, get) => ({
     set({ projects: { ...get().projects, loading: true } });
     try {
       const project = await projectService.getProjectById(projectId);
+      
+      // 清除本地上一个项目的所有缓存
+      console.log('🗑️  Clearing local cache when switching project...');
+      set({
+        analysis: { data: null, loading: false, error: null },
+        testAnalysis: { data: null, loading: false, error: null },
+        filterOptions: { data: null, loading: false, error: null },
+        crossAnalysis: { data: null, loading: false, error: null },
+        issues: { data: [], total: 0, page: 1, limit: 20, loading: false, error: null },
+        filterResults: { issues: [], total: 0, page: 1, limit: 50, statistics: null, timeTrend: null, analysis: null, loading: false, error: null, activeTab: 'details' },
+      });
+      
       set({
         projects: {
           ...get().projects,
@@ -155,6 +167,17 @@ const useStore = create((set, get) => ({
     try {
       const response = await projectService.createProject(formData);
       
+      // 清除本地所有缓存，确保获取最新数据 (防止用户看到旧数据)
+      console.log('🗑️  Clearing local cache after upload...');
+      set({
+        analysis: { data: null, loading: false, error: null },
+        testAnalysis: { data: null, loading: false, error: null },
+        filterOptions: { data: null, loading: false, error: null },
+        crossAnalysis: { data: null, loading: false, error: null },
+        issues: { data: [], total: 0, page: 1, limit: 20, loading: false, error: null },
+        filterResults: { issues: [], total: 0, page: 1, limit: 50, statistics: null, timeTrend: null, analysis: null, loading: false, error: null, activeTab: 'details' },
+      });
+      
       // Reload projects list
       await get().loadProjects();
       
@@ -177,13 +200,24 @@ const useStore = create((set, get) => ({
   async deleteProject(projectId, hard = false) {
     try {
       await projectService.deleteProject(projectId, hard);
+      
+      // 清除本地所有缓存
+      console.log('🗑️  Clearing local cache after deleting project...');
+      set({
+        analysis: { data: null, loading: false, error: null },
+        testAnalysis: { data: null, loading: false, error: null },
+        filterOptions: { data: null, loading: false, error: null },
+        crossAnalysis: { data: null, loading: false, error: null },
+        issues: { data: [], total: 0, page: 1, limit: 20, loading: false, error: null },
+        filterResults: { issues: [], total: 0, page: 1, limit: 50, statistics: null, timeTrend: null, analysis: null, loading: false, error: null, activeTab: 'details' },
+      });
+      
       await get().loadProjects();
       
       // If current project was deleted, clear it
       if (get().projects.current?.id === projectId) {
         set({
           projects: { ...get().projects, current: null },
-          analysis: { data: null, loading: false, error: null },
         });
       }
     } catch (error) {
