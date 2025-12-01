@@ -41,6 +41,11 @@ class AnalysisModel {
 
     let query = `SELECT * FROM issues WHERE project_id = ?`;
     const params = [projectId];
+    
+    // Debug logging for date filters
+    if (date_from || date_to) {
+      console.log(`🔍 Date filter detected - date_from: ${date_from}, date_to: ${date_to}`);
+    }
 
     // Helper function to parse comma-separated values
     const parseArray = (value) => {
@@ -51,12 +56,18 @@ class AnalysisModel {
 
     // Date range filter
     if (date_from) {
-      query += ` AND open_date >= ?`;
+      // Use string comparison for DATE fields (YYYY-MM-DD format)
+      // This works because dates are stored as text in ISO format
+      query += ` AND CAST(open_date AS TEXT) >= ?`;
       params.push(date_from);
+      console.log(`  ✅ Added date_from filter: ${date_from}`);
     }
     if (date_to) {
-      query += ` AND open_date <= ?`;
+      // Use string comparison for DATE fields (YYYY-MM-DD format)
+      // This works because dates are stored as text in ISO format
+      query += ` AND CAST(open_date AS TEXT) <= ?`;
       params.push(date_to);
+      console.log(`  ✅ Added date_to filter: ${date_to}`);
     }
 
     // Priority filter
@@ -176,6 +187,14 @@ class AnalysisModel {
 
     const stmt = db.prepare(query);
     const issues = stmt.all(...params);
+    
+    // Debug: Log the results after date filtering
+    if (date_from || date_to) {
+      console.log(`📄 Query results - Total issues matched: ${issues.length}`);
+      if (issues.length > 0) {
+        console.log(`  Sample issue dates: ${issues.slice(0, 3).map(i => i.open_date).join(', ')}`);
+      }
+    }
 
     return {
       issues,

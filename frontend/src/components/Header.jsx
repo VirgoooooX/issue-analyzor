@@ -1,19 +1,33 @@
 import { Layout, Select, Button, Upload, Modal, message, Spin, Menu, Dropdown } from 'antd';
-import { UploadOutlined, ReloadOutlined, DeleteOutlined, BarChartOutlined, DashboardOutlined, HomeOutlined, DownloadOutlined } from '@ant-design/icons';
+import { UploadOutlined, ReloadOutlined, DeleteOutlined, BarChartOutlined, DashboardOutlined, LogoutOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import useStore from '../store';
 import { projectService } from '../services/projectService';
+import Logo from './Logo';
 
 const { Header: AntHeader } = Layout;
 
 function Header() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { projects, selectProject, uploadProject, deleteProject, setUploadModalOpen, ui, filterContext } = useStore();
+  const { projects, selectProject, uploadProject, deleteProject, setUploadModalOpen, ui, filterContext, logout } = useStore();
   const { list, current, loading } = projects;
   const [uploading, setUploading] = useState(false);
   const [exporting, setExporting] = useState(false);
+
+  const handleLogout = () => {
+    Modal.confirm({
+      title: '确认退出',
+      content: '确定要退出登录吗？',
+      okText: '确认',
+      cancelText: '取消',
+      onOk() {
+        logout();
+        message.success('已退出登录');
+      },
+    });
+  };
 
   const handleProjectChange = (projectId) => {
     selectProject(projectId);
@@ -137,9 +151,10 @@ function Header() {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', padding: '0 24px', height: '64px' }}>
-        <h1 style={{ color: '#fff', margin: 0, fontSize: '20px', marginRight: '32px' }}>
-          📊 Failure Tracker Dashboard
-        </h1>
+        {/* 使用新 Logo */}
+        <div style={{ marginRight: '32px', cursor: 'pointer' }} onClick={() => navigate('/dashboard')}>
+          <Logo light size={40} />
+        </div>
 
         {current && (
           <Menu
@@ -237,6 +252,16 @@ function Header() {
               </Button>
             </>
           )}
+          
+          {/* 退出按钮 */}
+          <Button
+            type="default"
+            ghost
+            icon={<LogoutOutlined />}
+            onClick={handleLogout}
+          >
+            退出
+          </Button>
         </div>
       </div>
 

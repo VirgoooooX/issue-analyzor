@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Form, Input, Button, Card, message, Typography, Space } from 'antd';
+import { Form, Input, Button, message, Typography, Space } from 'antd';
 import { UserOutlined, LockOutlined, LoginOutlined } from '@ant-design/icons';
 import useStore from '../store';
+import Logo from '../components/Logo';
 import './loginPage.css';
 
 function LoginPage() {
@@ -26,122 +27,123 @@ function LoginPage() {
 
   return (
     <div className="login-container">
-      <Card className="login-card" bordered={false}>
-        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <div style={{ 
-            fontSize: '48px', 
-            marginBottom: '16px',
-            background: 'linear-gradient(135deg, #1890ff 0%, #003366 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            fontWeight: 'bold'
-          }}>
-            📊
+      {/* 左侧背景装饰 */}
+      <div className="login-decoration">
+        <div className="decoration-content">
+          {/* 使用新 Logo */}
+          <div style={{ marginBottom: '32px', transform: 'scale(1.5)' }}>
+            <Logo light size={80} showText={false} />
           </div>
-          <Title level={3} style={{ 
-            margin: 0, 
-            color: '#001529',
-            fontWeight: '600'
-          }}>
-            Failure Tracker
+          <Title level={1} style={{ color: '#fff', marginBottom: '16px', fontWeight: '700' }}>
+            Issue Analyzer
           </Title>
-          <Text type="secondary" style={{ fontSize: '14px' }}>
+          <Text style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: '16px', display: 'block', marginBottom: '8px' }}>
             设备故障数据分析平台
           </Text>
+          <Text style={{ color: 'rgba(255, 255, 255, 0.65)', fontSize: '14px' }}>
+            多维度分析 · 智能统计 · 可视化报表
+          </Text>
+          
+          {/* 装饰性图形 */}
+          <div className="decoration-circles">
+            <div className="circle circle-1"></div>
+            <div className="circle circle-2"></div>
+            <div className="circle circle-3"></div>
+          </div>
         </div>
+      </div>
+
+      {/* 右侧登录表单 */}
+      <div className="login-form-wrapper">
+        <div className="login-card">
+          <div className="login-header">
+            <Title level={2} style={{ margin: 0, color: '#262626', fontWeight: '600' }}>
+              欢迎登录
+            </Title>
+            <Text type="secondary" style={{ fontSize: '14px' }}>
+              请输入您的账号和密码
+            </Text>
+          </div>
         
-        <Form
-          form={form}
-          onFinish={handleLogin}
-          layout="vertical"
-          autoComplete="off"
-        >
-          <Form.Item
-            name="username"
-            label="用户名"
-            rules={[
-              {
-                required: true,
-                message: '请输入用户名',
-              },
-            ]}
+          <Form
+            form={form}
+            onFinish={handleLogin}
+            layout="vertical"
+            autoComplete="off"
+            className="login-form"
           >
-            <Input
-              prefix={<UserOutlined style={{ color: '#1890ff' }} />}
-              placeholder="请输入用户名"
-              size="large"
-              disabled={loading}
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="password"
-            label="密码"
-            rules={[
-              {
-                required: true,
-                message: '请输入密码',
-              },
-            ]}
-          >
-            <Input.Password
-              prefix={<LockOutlined style={{ color: '#1890ff' }} />}
-              placeholder="请输入密码"
-              size="large"
-              disabled={loading}
-            />
-          </Form.Item>
-
-          <Form.Item>
-            <Button
-              type="primary"
-              htmlType="submit"
-              block
-              size="large"
-              loading={loading}
-              disabled={loading}
-              icon={<LoginOutlined />}
+            <Form.Item
+              name="username"
+              rules={[
+                {
+                  required: true,
+                  message: '请输入用户名',
+                },
+              ]}
             >
-              {loading ? '登录中...' : '登录'}
-            </Button>
-          </Form.Item>
-        </Form>
+              <Input
+                prefix={<UserOutlined className="input-icon" />}
+                placeholder="用户名"
+                size="large"
+                disabled={loading}
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="password"
+              rules={[
+                {
+                  required: true,
+                  message: '请输入密码',
+                },
+              ]}
+            >
+              <Input.Password
+                prefix={<LockOutlined className="input-icon" />}
+                placeholder="密码"
+                size="large"
+                disabled={loading}
+              />
+            </Form.Item>
+
+            <Form.Item style={{ marginBottom: '12px' }}>
+              <Button
+                type="primary"
+                htmlType="submit"
+                block
+                size="large"
+                loading={loading}
+                disabled={loading}
+                icon={<LoginOutlined />}
+                className="login-button"
+              >
+                {loading ? '登录中...' : '登录'}
+              </Button>
+            </Form.Item>
+          </Form>
         
-        <div style={{ 
-          marginTop: '24px', 
-          textAlign: 'center', 
-          padding: '16px',
-          background: '#f8f9fa',
-          borderRadius: '8px',
-          border: '1px solid #e8e8e8'
-        }}>
-          <Space direction="vertical" size="small">
-            {import.meta.env.MODE === 'development' ? (
-              // 开发环境显示默认凭据
-              <>
+          {import.meta.env.MODE === 'development' && (
+            <div className="dev-info">
+              <Space direction="vertical" size="small" style={{ width: '100%' }}>
                 <Text type="secondary" style={{ fontSize: '12px' }}>
                   开发环境默认凭据
                 </Text>
-                <Text code>用户名: admin</Text>
-                <Text code>密码: password123</Text>
-                <Text type="warning" style={{ fontSize: '11px', marginTop: '8px' }}>
-                  ⚠️ 部署到生产环境时请修改默认密码
-                </Text>
-              </>
-            ) : (
-              // 生产环境只显示提示信息
-              <>
-                <Text type="secondary" style={{ fontSize: '12px' }}>
-                  请联系管理员获取登录凭据
-                </Text>
-                <Text type="warning" style={{ fontSize: '11px', marginTop: '8px' }}>
-                  ⚠️ 请确保使用安全的用户名和密码
-                </Text>
-              </>
-            )}
-          </Space>
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                  <Text code style={{ fontSize: '12px' }}>admin</Text>
+                  <Text type="secondary">/</Text>
+                  <Text code style={{ fontSize: '12px' }}>password123</Text>
+                </div>
+              </Space>
+            </div>
+          )}
+
+          <div className="login-footer">
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              ©2025 Issue Analyzer System · By Vigoss
+            </Text>
+          </div>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }

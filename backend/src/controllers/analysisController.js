@@ -155,6 +155,11 @@ async function getFilterStatistics(req, res, next) {
   try {
     const { id } = req.params;
     const { includeTrend, ...filters } = req.query;
+    
+    // Debug: Log incoming request
+    console.log(`\n🔍 getFilterStatistics API called`);
+    console.log(`  Project ID: ${id}`);
+    console.log(`  Filters received: date_from=${filters.date_from}, date_to=${filters.date_to}`);
 
     const includeTrendBool = includeTrend === 'true' || includeTrend === '1';
 
@@ -174,6 +179,9 @@ async function getFilterStatistics(req, res, next) {
       },
       3600 // 缓存1小时
     );
+    
+    // Debug: Log result
+    console.log(`✅ Filter statistics calculated - totalCount: ${statistics?.statistics?.totalCount || 0}`);
 
     res.json({
       success: true,

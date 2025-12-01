@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import useStore from '../store';
 import ReactECharts from 'echarts-for-react';
+import apiClient from '../services/api';
 import CrossAnalysisHeatmap from './CrossAnalysisHeatmap';
 
 // 统一的字体样式配置
@@ -130,11 +131,11 @@ function AnalysisView({
         }
         
         // Use the correct API path: /api/projects/:id/filter-statistics
-        const response = await fetch(
-          `/api/projects/${projectId}/filter-statistics?${queryParams.toString()}`
+        // Use apiClient instead of fetch to include authorization header
+        const result = await apiClient.get(
+          `/projects/${projectId}/filter-statistics?${queryParams.toString()}`
         );
-        const result = await response.json();
-        
+                
         console.log('📊 Today stats response:', result);
         
         if (result.success && result.data?.statistics) {

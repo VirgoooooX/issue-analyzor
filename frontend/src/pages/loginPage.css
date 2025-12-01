@@ -1,74 +1,207 @@
+/* 登录页面容器 - 分屏布局 */
 .login-container {
   display: flex;
-  justify-content: center;
-  align-items: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #001529 0%, #003366 100%);
-  padding: 20px;
+  background: #f0f2f5;
+}
+
+/* 左侧装饰区域 */
+.login-decoration {
+  flex: 1;
+  background: linear-gradient(135deg, #001529 0%, #002140 50%, #003a66 100%);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
+}
+
+.decoration-content {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  max-width: 480px;
+}
+
+/* 装饰性圆形 */
+.decoration-circles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.circle {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  animation: pulse 4s ease-in-out infinite;
+}
+
+.circle-1 {
+  width: 300px;
+  height: 300px;
+  top: -100px;
+  left: -100px;
+  animation-delay: 0s;
+}
+
+.circle-2 {
+  width: 200px;
+  height: 200px;
+  bottom: 50px;
+  right: -50px;
+  animation-delay: 1s;
+}
+
+.circle-3 {
+  width: 150px;
+  height: 150px;
+  top: 50%;
+  right: 10%;
+  animation-delay: 2s;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.1);
+  }
+}
+
+/* 右侧表单区域 */
+.login-form-wrapper {
+  flex: 0 0 480px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  padding: 24px;
 }
 
 .login-card {
   width: 100%;
   max-width: 400px;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  border: none;
-  overflow: hidden;
 }
 
-.login-card :global(.ant-card-head) {
-  background: white;
-  border-bottom: 1px solid #f0f0f0;
-  padding: 24px;
-  border-radius: 12px 12px 0 0 !important;
+.login-header {
+  text-align: center;
+  margin-bottom: 40px;
 }
 
-.login-card :global(.ant-card-body) {
-  padding: 32px;
+.login-form {
+  margin-top: 32px;
 }
 
-.login-card :global(.ant-form-item) {
-  margin-bottom: 20px;
+/* 输入框样式 */
+.login-form :global(.ant-form-item) {
+  margin-bottom: 24px;
 }
 
-.login-card :global(.ant-form-item-label) {
-  padding-bottom: 8px;
-}
-
-.login-card :global(.ant-form-item-label > label) {
-  font-weight: 500;
-  color: #333;
-}
-
-.login-card :global(.ant-input-affix-wrapper) {
-  border-radius: 6px;
-  padding: 8px 12px;
+.login-form :global(.ant-input-affix-wrapper),
+.login-form :global(.ant-input-password) {
+  height: 48px;
+  border-radius: 8px;
+  border: 1px solid #d9d9d9;
   transition: all 0.3s;
 }
 
-.login-card :global(.ant-input-affix-wrapper:hover) {
+.login-form :global(.ant-input-affix-wrapper:hover),
+.login-form :global(.ant-input-password:hover) {
   border-color: #1890ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
 }
 
-.login-card :global(.ant-input-affix-wrapper:focus) {
+.login-form :global(.ant-input-affix-wrapper:focus),
+.login-form :global(.ant-input-affix-wrapper-focused),
+.login-form :global(.ant-input-password:focus) {
   border-color: #1890ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
 }
 
-.login-card :global(.ant-btn-primary) {
-  height: 44px;
+.login-form :global(.ant-input) {
+  font-size: 14px;
+}
+
+.input-icon {
+  color: #8c8c8c;
+  font-size: 16px;
+}
+
+/* 登录按钮样式 */
+.login-button {
+  height: 48px;
   font-size: 16px;
   font-weight: 500;
-  border-radius: 6px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+  border: none;
   transition: all 0.3s;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.2);
 }
 
-.login-card :global(.ant-btn-primary:hover) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.3);
+.login-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(24, 144, 255, 0.3);
+  background: linear-gradient(135deg, #40a9ff 0%, #1890ff 100%);
 }
 
-.login-card :global(.ant-btn-primary:active) {
+.login-button:active:not(:disabled) {
   transform: translateY(0);
+}
+
+/* 开发环境提示信息 */
+.dev-info {
+  margin-top: 24px;
+  padding: 16px;
+  background: #f6f8fa;
+  border-radius: 8px;
+  text-align: center;
+}
+
+/* 页脚 */
+.login-footer {
+  margin-top: 32px;
+  text-align: center;
+  padding-top: 24px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .login-container {
+    flex-direction: column;
+  }
+
+  .login-decoration {
+    flex: 0 0 auto;
+    min-height: 300px;
+    padding: 40px 24px;
+  }
+
+  .logo-large {
+    font-size: 80px;
+  }
+
+  .decoration-content h1 {
+    font-size: 28px !important;
+  }
+
+  .login-form-wrapper {
+    flex: 1;
+    padding: 32px 24px;
+  }
+
+  .circle-1,
+  .circle-2,
+  .circle-3 {
+    display: none;
+  }
 }

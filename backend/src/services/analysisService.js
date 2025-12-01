@@ -872,11 +872,21 @@ class AnalysisService {
     if (normalizedFilters.wfs) normalizedFilters.wfs = parseArrayParam(normalizedFilters.wfs);
     if (normalizedFilters.configs) normalizedFilters.configs = parseArrayParam(normalizedFilters.configs);
     if (normalizedFilters.failed_tests) normalizedFilters.failed_tests = parseArrayParam(normalizedFilters.failed_tests);
+    
+    // Debug: Log input
+    console.log(`📄 calculateFilterStats called with:`);
+    console.log(`  Total input issues: ${issues.length}`);
+    console.log(`  Filters: date_from=${filters.date_from}, date_to=${filters.date_to}`);
 
     // 排除 FA Status 为 "retest pass" 的 issues
     const validIssues = issues.filter(issue => 
       issue.fa_status && issue.fa_status.toLowerCase() !== 'retest pass'
     );
+    
+    console.log(`  After excluding 'retest pass': ${validIssues.length} issues`);
+    if (validIssues.length > 0) {
+      console.log(`  Sample issue statuses: ${validIssues.slice(0, 3).map(i => `${i.fa_number}(${i.fa_status})`).join(', ')}`);
+    }
 
     const totalCount = validIssues.length;
     const specSNs = new Set();

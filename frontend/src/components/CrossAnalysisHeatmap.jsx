@@ -32,25 +32,41 @@ const CrossAnalysisHeatmap = ({ projectId, filters: propFilters }) => {
   const [hoveredCell, setHoveredCell] = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
+  // 使用本地状态来管理维度，确保刷新后显示默认值
+  const [dimension1, setDimension1] = useState(crossAnalysis.dimension1 || 'symptom');
+  const [dimension2, setDimension2] = useState(crossAnalysis.dimension2 || 'config');
+
   const currentFilters = propFilters || storeFilters;
+
+  // 当 store 中的维度值改变时，更新本地状态
+  useEffect(() => {
+    if (crossAnalysis.dimension1) {
+      setDimension1(crossAnalysis.dimension1);
+    }
+    if (crossAnalysis.dimension2) {
+      setDimension2(crossAnalysis.dimension2);
+    }
+  }, [crossAnalysis.dimension1, crossAnalysis.dimension2]);
 
   useEffect(() => {
     if (projectId) {
       loadCrossAnalysis(
         projectId,
-        crossAnalysis.dimension1,
-        crossAnalysis.dimension2,
+        dimension1,
+        dimension2,
         currentFilters
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, crossAnalysis.dimension1, crossAnalysis.dimension2, currentFilters]);
+  }, [projectId, dimension1, dimension2, currentFilters]);
 
   const handleDimensionChange = (value, type) => {
     if (type === 'dimension1') {
-      setCrossAnalysisDimensions(value, crossAnalysis.dimension2);
+      setDimension1(value);
+      setCrossAnalysisDimensions(value, dimension2);
     } else {
-      setCrossAnalysisDimensions(crossAnalysis.dimension1, value);
+      setDimension2(value);
+      setCrossAnalysisDimensions(dimension1, value);
     }
   };
 
@@ -70,15 +86,15 @@ const CrossAnalysisHeatmap = ({ projectId, filters: propFilters }) => {
       
       const blob = await projectService.exportCrossAnalysis(
         projectId,
-        crossAnalysis.dimension1,
-        crossAnalysis.dimension2,
+        dimension1,
+        dimension2,
         exportFilters
       );
       
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `CrossAnalysis_${crossAnalysis.dimension1}_${crossAnalysis.dimension2}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      link.download = `CrossAnalysis_${dimension1}_${dimension2}_${new Date().toISOString().slice(0, 10)}.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -191,7 +207,7 @@ const CrossAnalysisHeatmap = ({ projectId, filters: propFilters }) => {
                 lineHeight: '1.6',
                 textAlign: 'center'
               }}>
-                {getDimensionLabel(crossAnalysis.dimension1)}
+                {getDimensionLabel(dimension1)}
               </th>
               {dimension2Values.map((val) => (
                 <th key={val} style={{
@@ -285,8 +301,8 @@ const CrossAnalysisHeatmap = ({ projectId, filters: propFilters }) => {
                           
                           const drillFilters = {
                             ...currentFilters,
-                            [dimensionToFilterKey[crossAnalysis.dimension1]]: [dim1Val],
-                            [dimensionToFilterKey[crossAnalysis.dimension2]]: [dim2Val],
+                            [dimensionToFilterKey[dimension1]]: [dim1Val],
+                            [dimensionToFilterKey[dimension2]]: [dim2Val],
                           };
                           
                           updateFilterContext(drillFilters);
@@ -390,12 +406,12 @@ const CrossAnalysisHeatmap = ({ projectId, filters: propFilters }) => {
             <Text type="secondary" style={{ fontSize: '13px' }}>维度1:</Text>
             <Select
               size="middle"
-              value={crossAnalysis.dimension1}
+              value={dimension1}
               style={{ width: 110 }}
               onChange={(value) => handleDimensionChange(value, 'dimension1')}
             >
               {dimensionOptions
-                .filter((opt) => opt.value !== crossAnalysis.dimension2)
+                .filter((opt) => opt.value !== dimension2)
                 .map((opt) => (
                   <Option key={opt.value} value={opt.value}>
                     {opt.label}
@@ -407,12 +423,12 @@ const CrossAnalysisHeatmap = ({ projectId, filters: propFilters }) => {
             <Text type="secondary" style={{ fontSize: '13px' }}>维度2:</Text>
             <Select
               size="middle"
-              value={crossAnalysis.dimension2}
+              value={dimension2}
               style={{ width: 110 }}
               onChange={(value) => handleDimensionChange(value, 'dimension2')}
             >
               {dimensionOptions
-                .filter((opt) => opt.value !== crossAnalysis.dimension1)
+                .filter((opt) => opt.value !== dimension1)
                 .map((opt) => (
                   <Option key={opt.value} value={opt.value}>
                     {opt.label}
