@@ -1,5 +1,5 @@
 const path = require('path');
-require('dotenv').config();
+// require('dotenv').config(); // Moved to server.js to ensure proper loading
 
 module.exports = {
   // Server configuration
@@ -41,4 +41,17 @@ module.exports = {
     headerRow: 7, // 第7行是表头
     dataStartRow: 8, // 第8行开始是数据
   },
+
+  // Authentication configuration
+  auth: {
+    enabled: (process.env.AUTH_ENABLED === 'true' || process.env.AUTH_ENABLED === true) || false,
+    username: process.env.AUTH_USERNAME || 'admin',
+    password: process.env.AUTH_PASSWORD || 'password',
+    tokenSecret: process.env.AUTH_TOKEN_SECRET || 'your-secret-key-change-in-production',
+    tokenExpiry: '7d',
+  },
 };
+
+// Debug auth config
+console.log('🔧 Process env AUTH_ENABLED:', process.env.AUTH_ENABLED);
+console.log('🔧 Auth config loaded:', module.exports.auth);

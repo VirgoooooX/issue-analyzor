@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { projectService } from '../services/projectService';
+import { authService } from '../services/authService';
 
 const useStore = create((set, get) => ({
   // Projects state
@@ -96,6 +97,24 @@ const useStore = create((set, get) => ({
     appliedFilters: {},
     filterTags: [],
     sourceRoute: '/dashboard',
+  },
+
+  // Auth state
+  auth: {
+    isAuthenticated: false,  // 初始值为 false，由 checkAuthStatus() 更新
+    username: null,
+    token: null,
+    loading: false,
+    error: null,
+  },
+  
+  // Debug: Log initial state
+  init: () => {
+    console.log('🔧 Store initialized, initial auth state:', {
+      isAuthenticated: false,
+      username: null,
+      token: null,
+    });
   },
 
   // Actions: Projects
@@ -501,6 +520,112 @@ const useStore = create((set, get) => ({
         activeTab: tab,
       },
     });
+  },
+
+  // Actions: Auth
+  async login(username, password) {
+    set({ auth: { ...get().auth, loading: true, error: null } });
+    try {
+      const response = await authService.login(username, password);
+      const token = response.data.token;
+      const user = response.data.username;
+
+      // 保存 token 和 username 到 localStorage
+      authService.saveToken(token);
+      localStorage.setItem('auth_username', user);
+
+      // 更新状态
+      set({
+        auth: {
+          isAuthenticated: true,
+          username: user,
+          token,
+          loading: false,
+          error: null,
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      const errorMessage = error.response?.data?.error?.message || error.message || '登录失败';
+      set({
+        auth: {
+          ...get().auth,
+          loading: false,
+          error: errorMessage,
+        },
+      });
+      throw new Error(errorMessage);
+    }
+  },
+
+  logout() {
+    authService.clearToken();
+    localStorage.removeItem('auth_username');
+    set({
+      auth: {
+        isAuthenticated: false,
+        username: null,
+        token: null,
+        loading: false,
+        error: null,
+      },
+      // 清除所有项目相关数据
+      projects: {
+        list: [],
+        current: null,
+        loading: false,
+        error: null,
+      },
+    });
+  },
+
+  checkAuthStatus() {
+    // 清理可能存在的无效 token
+    const token = authService.getToken();
+    console.log('🔍 checkAuthStatus - token:', token);
+    
+    if (token) {
+      // 尝试验证 token
+      authService.verify().then(response => {
+        console.log('✅ Token verified:', response);
+        const username = response.data.username || localStorage.getItem('auth_username') || 'user';
+        set({
+          auth: {
+            isAuthenticated: true,
+            token,
+            username,
+            loading: false,
+            error: null,
+          },
+        });
+      }).catch(error => {
+        console.log('❌ Token verification failed:', error);
+        // 清除无效的 token
+        authService.clearToken();
+        localStorage.removeItem('auth_username');
+        set({
+          auth: {
+            isAuthenticated: false,
+            username: null,
+            token: null,
+            loading: false,
+            error: null,
+          },
+        });
+      });
+    } else {
+      console.log('❌ No token found');
+      set({
+        auth: {
+          isAuthenticated: false,
+          username: null,
+          token: null,
+          loading: false,
+          error: null,
+        },
+      });
+    }
   },
 }));
 

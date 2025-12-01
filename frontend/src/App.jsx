@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider, Layout, Spin, Empty, Button } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
@@ -6,23 +6,51 @@ import Header from './components/Header';
 import DashboardPage from './pages/DashboardPage';
 import FilterResultsPage from './pages/FilterResultsPage';
 import FailureRateMatrixPage from './pages/FailureRateMatrixPage';
+import LoginPage from './pages/LoginPage';
 import useStore from './store';
 
 const { Content } = Layout;
 
 function App() {
-  const { projects, loadProjects, setUploadModalOpen, selectProject } = useStore();
+  const { projects, loadProjects, setUploadModalOpen, selectProject, auth, checkAuthStatus } = useStore();
   const { list, current, loading } = projects;
+  const { isAuthenticated } = auth;
+
+  console.log('🔍 Rendering App, auth state:', auth);
+
+  // 检查认证状态
+  useEffect(() => {
+    console.log('🔍 App mounted, checking auth status...');
+    const result = checkAuthStatus();
+    console.log('🔍 checkAuthStatus result:', result);
+  }, []);
+
+  // 监听认证状态变化
+  useEffect(() => {
+    console.log('🔄 Auth state changed:', { isAuthenticated });
+  }, [isAuthenticated]);
 
   useEffect(() => {
-    loadProjects().then(() => {
-      // 尝试从 localStorage 恢复上次选择的项目
-      const savedProjectId = localStorage.getItem('currentProjectId');
-      if (savedProjectId && !current) {
-        selectProject(parseInt(savedProjectId));
-      }
-    });
-  }, [loadProjects, selectProject]);
+    if (isAuthenticated) {
+      loadProjects().then(() => {
+        // 尝试从 localStorage 恢复上次选择的项目
+        const savedProjectId = localStorage.getItem('currentProjectId');
+        if (savedProjectId && !current) {
+          selectProject(parseInt(savedProjectId));
+        }
+      });
+    }
+  }, [isAuthenticated, loadProjects, selectProject]);
+
+  // 如果未认证，显示登录页面
+  if (!isAuthenticated) {
+    console.log('🔄 Showing LoginPage because not authenticated');
+    return (
+      <ConfigProvider locale={zhCN}>
+        <LoginPage />
+      </ConfigProvider>
+    );
+  }
 
   return (
     <ConfigProvider locale={zhCN}>

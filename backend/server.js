@@ -2,6 +2,17 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const path = require('path');
+require('dotenv').config(); // Load environment variables first
+
+// Debug: Manually set auth env vars if not loaded
+if (!process.env.AUTH_ENABLED) {
+  process.env.AUTH_ENABLED = 'true';
+  process.env.AUTH_USERNAME = 'admin';
+  process.env.AUTH_PASSWORD = 'password123';
+  process.env.AUTH_TOKEN_SECRET = 'your-secret-key-change-in-production';
+  console.log('🔧 Manually set auth environment variables');
+}
+
 const config = require('./src/config');
 const { initDatabase, closeDatabase } = require('./src/models/database');
 const cacheService = require('./src/services/cacheService');
@@ -50,9 +61,16 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// API Routes
+// Auth routes (无需认证)
+const authRoutes = require('./src/routes/authRoutes');
+app.use('/api/auth', authRoutes);
+
+// Auth middleware (用于保护其他 API)
+const authMiddleware = require('./src/middleware/authMiddleware');
+
+// API Routes (受认证保护)
 const apiRoutes = require('./src/routes/apiRoutes');
-app.use('/api/projects', apiRoutes);
+app.use('/api/projects', authMiddleware, apiRoutes);
 
 // 404 handler
 app.use((req, res) => {
