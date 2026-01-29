@@ -119,6 +119,24 @@ async function runMigrations() {
       `ALTER TABLE issues ADD COLUMN unit_number TEXT;`,
       // Add failed_cycle_count column if it doesn't exist
       `ALTER TABLE issues ADD COLUMN failed_cycle_count INTEGER;`,
+      // Create users table
+      `CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );`,
+      // Create saved_filters table
+      `CREATE TABLE IF NOT EXISTS saved_filters (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        project_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        filters TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (project_id) REFERENCES projects(id)
+      );`
     ];
 
     for (const migration of migrations) {

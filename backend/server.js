@@ -72,6 +72,9 @@ const authMiddleware = require('./src/middleware/authMiddleware');
 const apiRoutes = require('./src/routes/apiRoutes');
 app.use('/api/projects', authMiddleware, apiRoutes);
 
+const filterRoutes = require('./src/routes/filterRoutes');
+app.use('/api/filters', filterRoutes);
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({

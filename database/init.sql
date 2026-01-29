@@ -117,6 +117,34 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_analysis_cache_project_type
     ON analysis_cache(project_id, cache_type);
 
 -- ====================================
+-- Table 5: users (用户表)
+-- ====================================
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ====================================
+-- Table 6: saved_filters (已保存的筛选器)
+-- ====================================
+CREATE TABLE IF NOT EXISTS saved_filters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    project_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    filters TEXT NOT NULL,  -- JSON string
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+-- Saved filters table indexes
+CREATE INDEX IF NOT EXISTS idx_saved_filters_user ON saved_filters(user_id);
+CREATE INDEX IF NOT EXISTS idx_saved_filters_project ON saved_filters(project_id);
+
+-- ====================================
 -- Database optimization settings
 -- ====================================
 -- Use DELETE journal mode for Docker compatibility
