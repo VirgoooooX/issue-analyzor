@@ -13,7 +13,7 @@ data/*.db
 data/*.db-*
 *.sqlite
 *.sqlite3
-
+.trae
 # Uploads
 backend/uploads/*
 !backend/uploads/.gitkeep
