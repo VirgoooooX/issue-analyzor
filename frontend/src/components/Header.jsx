@@ -1,5 +1,5 @@
 import { Layout, Select, Button, Upload, Modal, message, Spin, Menu, Dropdown } from 'antd';
-import { UploadOutlined, ReloadOutlined, DeleteOutlined, BarChartOutlined, DashboardOutlined, LogoutOutlined, DownloadOutlined } from '@ant-design/icons';
+import { UploadOutlined, ReloadOutlined, DeleteOutlined, BarChartOutlined, DashboardOutlined, LogoutOutlined, DownloadOutlined, TeamOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import useStore from '../store';
@@ -11,10 +11,11 @@ const { Header: AntHeader } = Layout;
 function Header() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { projects, selectProject, uploadProject, deleteProject, setUploadModalOpen, ui, filterContext, logout } = useStore();
+  const { projects, selectProject, uploadProject, deleteProject, setUploadModalOpen, ui, filterContext, logout, auth } = useStore();
   const { list, current, loading } = projects;
   const [uploading, setUploading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const isAdmin = auth?.role === 'admin';
 
   const handleLogout = () => {
     Modal.confirm({
@@ -156,7 +157,7 @@ function Header() {
           <Logo light size={40} />
         </div>
 
-        {current && (
+        {(current || isAdmin) && (
           <Menu
             mode="horizontal"
             selectedKeys={[location.pathname]}
@@ -179,6 +180,15 @@ function Header() {
                 icon: <BarChartOutlined />,
                 label: '失败率矩阵',
               },
+              ...(isAdmin
+                ? [
+                    {
+                      key: '/admin/users',
+                      icon: <TeamOutlined />,
+                      label: '用户管理',
+                    },
+                  ]
+                : []),
             ]}
           />
         )}

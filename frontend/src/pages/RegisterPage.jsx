@@ -1,26 +1,27 @@
 import { useState } from 'react';
 import { Form, Input, Button, message, Typography, Space } from 'antd';
-import { UserOutlined, LockOutlined, LoginOutlined } from '@ant-design/icons';
-import { Link } from 'react-router-dom';
-import useStore from '../store';
+import { UserOutlined, LockOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Link, useNavigate } from 'react-router-dom';
 import Logo from '../components/Logo';
+import authService from '../services/authService';
 import './loginPage.css';
 
-function LoginPage() {
+function RegisterPage() {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const { login } = useStore();
-  
+  const navigate = useNavigate();
   const { Title, Text } = Typography;
 
-  const handleLogin = async (values) => {
+  const handleRegister = async (values) => {
     setLoading(true);
     try {
-      await login(values.username, values.password);
-      message.success('登录成功！');
-      // 登录成功后会自动重定向到主页面
+      await authService.register(values.username, values.password);
+      message.success('注册申请已提交，等待管理员审核');
+      form.resetFields();
+      navigate('/login', { replace: true });
     } catch (error) {
-      message.error(error.message || '登录失败，请检查用户名和密码');
+      const errorMessage = error.response?.data?.error?.message || error.message || '注册失败';
+      message.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -28,24 +29,27 @@ function LoginPage() {
 
   return (
     <div className="login-container">
-      {/* 左侧背景装饰 */}
       <div className="login-decoration">
         <div className="decoration-content">
-          {/* 使用新 Logo */}
           <div style={{ marginBottom: '32px', transform: 'scale(1.5)' }}>
             <Logo light size={80} showText={false} />
           </div>
           <Title level={1} style={{ color: '#fff', marginBottom: '16px', fontWeight: '700' }}>
             Issue Analyzer
           </Title>
-          <Text style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: '16px', display: 'block', marginBottom: '8px' }}>
-            设备故障数据分析平台
+          <Text
+            style={{
+              color: 'rgba(255, 255, 255, 0.85)',
+              fontSize: '16px',
+              display: 'block',
+              marginBottom: '8px',
+            }}
+          >
+            账号注册申请
           </Text>
           <Text style={{ color: 'rgba(255, 255, 255, 0.65)', fontSize: '14px' }}>
-            多维度分析 · 智能统计 · 可视化报表
+            注册后需要管理员审核通过才能登录
           </Text>
-          
-          {/* 装饰性图形 */}
           <div className="decoration-circles">
             <div className="circle circle-1"></div>
             <div className="circle circle-2"></div>
@@ -54,48 +58,31 @@ function LoginPage() {
         </div>
       </div>
 
-      {/* 右侧登录表单 */}
       <div className="login-form-wrapper">
         <div className="login-card">
           <div className="login-header">
             <Title level={2} style={{ margin: 0, color: '#262626', fontWeight: '600' }}>
-              欢迎登录
+              创建账号
             </Title>
             <Text type="secondary" style={{ fontSize: '14px' }}>
-              请输入您的账号和密码
+              填写信息并提交审核
             </Text>
           </div>
-        
-          <Form
-            form={form}
-            onFinish={handleLogin}
-            layout="vertical"
-            autoComplete="off"
-            className="login-form"
-          >
-            <Form.Item
-              name="username"
-              rules={[
-                {
-                  required: true,
-                  message: '请输入用户名',
-                },
-              ]}
-            >
-              <Input
-                prefix={<UserOutlined className="input-icon" />}
-                placeholder="用户名"
-                size="large"
-                disabled={loading}
-              />
+
+          <Form form={form} onFinish={handleRegister} layout="vertical" autoComplete="off" className="login-form">
+            <Form.Item name="username" rules={[{ required: true, message: '请输入用户名' }]}>
+              <Input prefix={<UserOutlined className="input-icon" />} placeholder="用户名" size="large" disabled={loading} />
             </Form.Item>
 
             <Form.Item
               name="password"
               rules={[
+                { required: true, message: '请输入密码' },
                 {
-                  required: true,
-                  message: '请输入密码',
+                  validator: async (_, value) => {
+                    if (!value) return;
+                    if (String(value).length < 4) throw new Error('密码至少 4 位');
+                  },
                 },
               ]}
             >
@@ -107,7 +94,28 @@ function LoginPage() {
               />
             </Form.Item>
 
-            <Form.Item style={{ marginBottom: '12px' }}>
+            <Form.Item
+              name="confirmPassword"
+              dependencies={['password']}
+              rules={[
+                { required: true, message: '请再次输入密码' },
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    if (!value || getFieldValue('password') === value) return Promise.resolve();
+                    return Promise.reject(new Error('两次输入的密码不一致'));
+                  },
+                }),
+              ]}
+            >
+              <Input.Password
+                prefix={<LockOutlined className="input-icon" />}
+                placeholder="确认密码"
+                size="large"
+                disabled={loading}
+              />
+            </Form.Item>
+
+            <Form.Item style={{ marginBottom: 12 }}>
               <Button
                 type="primary"
                 htmlType="submit"
@@ -115,10 +123,10 @@ function LoginPage() {
                 size="large"
                 loading={loading}
                 disabled={loading}
-                icon={<LoginOutlined />}
+                icon={<CheckCircleOutlined />}
                 className="login-button"
               >
-                {loading ? '登录中...' : '登录'}
+                {loading ? '提交中...' : '提交注册申请'}
               </Button>
             </Form.Item>
           </Form>
@@ -126,28 +134,13 @@ function LoginPage() {
           <div style={{ textAlign: 'center', marginTop: 8 }}>
             <Space size={6}>
               <Text type="secondary" style={{ fontSize: 12 }}>
-                没有账号？
+                已有账号？
               </Text>
-              <Link to="/register" style={{ fontSize: 12 }}>
-                申请注册
+              <Link to="/login" style={{ fontSize: 12 }}>
+                返回登录
               </Link>
             </Space>
           </div>
-        
-          {import.meta.env.MODE === 'development' && (
-            <div className="dev-info">
-              <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                <Text type="secondary" style={{ fontSize: '12px' }}>
-                  开发环境默认凭据
-                </Text>
-                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                  <Text code style={{ fontSize: '12px' }}>admin</Text>
-                  <Text type="secondary">/</Text>
-                  <Text code style={{ fontSize: '12px' }}>password123</Text>
-                </div>
-              </Space>
-            </div>
-          )}
 
           <div className="login-footer">
             <Text type="secondary" style={{ fontSize: '12px' }}>
@@ -160,4 +153,5 @@ function LoginPage() {
   );
 }
 
-export default LoginPage;
+export default RegisterPage;
+

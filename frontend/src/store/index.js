@@ -103,6 +103,7 @@ const useStore = create((set, get) => ({
   auth: {
     isAuthenticated: false,  // 初始值为 false，由 checkAuthStatus() 更新
     username: null,
+    role: null,
     token: null,
     loading: false,
     error: null,
@@ -113,6 +114,7 @@ const useStore = create((set, get) => ({
     console.log('🔧 Store initialized, initial auth state:', {
       isAuthenticated: false,
       username: null,
+      role: null,
       token: null,
     });
   },
@@ -529,6 +531,7 @@ const useStore = create((set, get) => ({
       const response = await authService.login(username, password);
       const token = response.data.token;
       const user = response.data.username;
+      const role = response.data.role;
 
       // 保存 token 和 username 到 localStorage
       authService.saveToken(token);
@@ -539,6 +542,7 @@ const useStore = create((set, get) => ({
         auth: {
           isAuthenticated: true,
           username: user,
+          role,
           token,
           loading: false,
           error: null,
@@ -566,6 +570,7 @@ const useStore = create((set, get) => ({
       auth: {
         isAuthenticated: false,
         username: null,
+        role: null,
         token: null,
         loading: false,
         error: null,
@@ -590,11 +595,13 @@ const useStore = create((set, get) => ({
       authService.verify().then(response => {
         console.log('✅ Token verified:', response);
         const username = response.data.username || localStorage.getItem('auth_username') || 'user';
+        const role = response.data.role || null;
         set({
           auth: {
             isAuthenticated: true,
             token,
             username,
+            role,
             loading: false,
             error: null,
           },
@@ -608,6 +615,7 @@ const useStore = create((set, get) => ({
           auth: {
             isAuthenticated: false,
             username: null,
+            role: null,
             token: null,
             loading: false,
             error: null,
@@ -620,6 +628,7 @@ const useStore = create((set, get) => ({
         auth: {
           isAuthenticated: false,
           username: null,
+          role: null,
           token: null,
           loading: false,
           error: null,

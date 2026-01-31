@@ -52,6 +52,29 @@ async function initDatabase() {
     return db;
   } catch (error) {
     console.error('❌ Database initialization failed:', error);
+    
+    // Auto-recovery for malformed database
+    if (error.message && error.message.includes('database disk image is malformed')) {
+      console.warn('⚠️  Database file is corrupted. Attempting to reset...');
+      try {
+        if (db) {
+          try { db.close(); } catch (e) { /* ignore */ }
+          db = null;
+        }
+        
+        const backupPath = `${config.database.path}.corrupted.${Date.now()}`;
+        await fs.rename(config.database.path, backupPath);
+        console.warn(`✅ Corrupted database moved to ${path.basename(backupPath)}`);
+        console.warn('🔄 Restarting database initialization...');
+        
+        // Retry initialization
+        return await initDatabase();
+      } catch (recoveryError) {
+        console.error('❌ Database recovery failed:', recoveryError);
+        throw error; // Throw original error if recovery fails
+      }
+    }
+    
     throw error;
   }
 }
@@ -124,8 +147,14 @@ async function runMigrations() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'user',
+        status TEXT NOT NULL DEFAULT 'active',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );`,
+      `ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user';`,
+      `UPDATE users SET role = 'user' WHERE role IS NULL OR role = '';`,
+      `ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active';`,
+      `UPDATE users SET status = 'active' WHERE status IS NULL OR status = '';`,
       // Create saved_filters table
       `CREATE TABLE IF NOT EXISTS saved_filters (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

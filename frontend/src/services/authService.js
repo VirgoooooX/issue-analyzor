@@ -12,6 +12,14 @@ export const authService = {
     });
   },
 
+  // 用户注册（提交审核）
+  async register(username, password) {
+    return apiClient.post('/auth/register', {
+      username,
+      password,
+    });
+  },
+
   // 验证 token
   async verify() {
     return apiClient.get('/auth/verify');

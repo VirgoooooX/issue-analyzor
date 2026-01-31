@@ -67,6 +67,7 @@ app.use('/api/auth', authRoutes);
 
 // Auth middleware (用于保护其他 API)
 const authMiddleware = require('./src/middleware/authMiddleware');
+const requireAdmin = require('./src/middleware/requireAdmin');
 
 // API Routes (受认证保护)
 const apiRoutes = require('./src/routes/apiRoutes');
@@ -74,6 +75,9 @@ app.use('/api/projects', authMiddleware, apiRoutes);
 
 const filterRoutes = require('./src/routes/filterRoutes');
 app.use('/api/filters', filterRoutes);
+
+const adminUserRoutes = require('./src/routes/adminUserRoutes');
+app.use('/api/admin/users', authMiddleware, requireAdmin, adminUserRoutes);
 
 // 404 handler
 app.use((req, res) => {

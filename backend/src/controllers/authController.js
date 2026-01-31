@@ -33,6 +33,13 @@ async function register(req, res, next) {
       });
     }
 
+    if (username === config.auth.username) {
+      return res.status(409).json({
+        success: false,
+        error: { code: 'USERNAME_RESERVED', message: '用户名已被保留' }
+      });
+    }
+
     const db = getDatabase();
     
     // Check if user exists
@@ -45,7 +52,9 @@ async function register(req, res, next) {
     }
 
     const hashedPassword = hashPassword(password);
-    db.prepare('INSERT INTO users (username, password) VALUES (?, ?)').run(username, hashedPassword);
+    db
+      .prepare('INSERT INTO users (username, password, role, status) VALUES (?, ?, ?, ?)')
+      .run(username, hashedPassword, 'user', 'pending');
     
     // Force save is handled by debounced save in wrapper, but we can force it
     // await require('../models/database').forceSaveDatabase(); 
@@ -77,7 +86,7 @@ async function login(req, res, next) {
         if (password === config.auth.password) {
              console.log('Creating default admin user in DB...');
              const hashedPassword = hashPassword(password);
-             db.prepare('INSERT INTO users (username, password) VALUES (?, ?)').run(username, hashedPassword);
+             db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)').run(username, hashedPassword, 'admin');
              
              user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
         }
@@ -89,6 +98,24 @@ async function login(req, res, next) {
          success: false,
          error: { code: 'INVALID_CREDENTIALS', message: 'Invalid username or password' }
        });
+    }
+
+    if (username === config.auth.username && user.status !== 'active') {
+      db.prepare('UPDATE users SET status = ? WHERE id = ?').run('active', user.id);
+      user = { ...user, status: 'active' };
+    }
+
+    if (username === config.auth.username && user.role !== 'admin') {
+      db.prepare('UPDATE users SET role = ? WHERE id = ?').run('admin', user.id);
+      user = { ...user, role: 'admin' };
+    }
+
+    if (user.status !== 'active') {
+      const error =
+        user.status === 'pending'
+          ? { code: 'ACCOUNT_PENDING', message: '账号待管理员审核' }
+          : { code: 'ACCOUNT_REJECTED', message: '账号申请已被拒绝' };
+      return res.status(403).json({ success: false, error });
     }
 
     // Generate JWT token
@@ -110,6 +137,7 @@ async function login(req, res, next) {
         token,
         username: user.username,
         id: user.id,
+        role: user.role,
         expiresIn: config.auth.tokenExpiry,
       },
     });
@@ -125,11 +153,35 @@ async function login(req, res, next) {
  */
 async function verify(req, res, next) {
   try {
+    const db = getDatabase();
+    const user = db.prepare('SELECT id, username, role, status FROM users WHERE id = ?').get(req.user.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: { code: 'INVALID_TOKEN', message: 'User not found' },
+      });
+    }
+
+    if (user.username === config.auth.username && user.status !== 'active') {
+      db.prepare('UPDATE users SET status = ? WHERE id = ?').run('active', user.id);
+      user.status = 'active';
+    }
+
+    if (user.status !== 'active') {
+      const error =
+        user.status === 'pending'
+          ? { code: 'ACCOUNT_PENDING', message: '账号待管理员审核' }
+          : { code: 'ACCOUNT_REJECTED', message: '账号申请已被拒绝' };
+      return res.status(403).json({ success: false, error });
+    }
+
     return res.status(200).json({
       success: true,
       data: {
-        username: req.user.username,
-        id: req.user.id,
+        username: user.username,
+        id: user.id,
+        role: user.role,
+        status: user.status,
         message: 'Token is valid',
       },
     });
