@@ -371,9 +371,7 @@ class AnalysisModel {
       this.getSampleSizes(projectId),
     ]);
 
-    const issues = issuesResult.issues.filter(issue => 
-      issue.fa_status && issue.fa_status.toLowerCase() !== 'retest pass'
-    );
+    const issues = issuesResult.issues.filter((issue) => analysisService.shouldIncludeInAnalysis(issue));
 
     // Use analysisService to calculate test stats
     const wfSampleMap = analysisService.buildWFSampleMap(sampleSizes);

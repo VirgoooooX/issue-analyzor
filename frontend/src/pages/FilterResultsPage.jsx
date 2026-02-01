@@ -46,7 +46,11 @@ const FilterResultsPage = () => {
     // 同时清除两个地方：filterContext 和 filters
     clearAllFilters();
     resetFilters();
-    navigate('/dashboard');
+    if (projects.current?.id) {
+      navigate(`/build/${projects.current.id}`);
+    } else {
+      navigate('/dashboard');
+    }
   };
 
   const handleRemoveTag = (tagKey, tagValue) => {
@@ -74,7 +78,7 @@ const FilterResultsPage = () => {
     if (projects.current?.id) {
       loadFilterResults(projects.current.id, {}, 1, 50);
       // Update URL to reflect cleared filters
-      navigate('/dashboard');
+      navigate(`/build/${projects.current.id}`);
     }
   };
 

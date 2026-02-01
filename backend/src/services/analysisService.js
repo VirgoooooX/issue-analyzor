@@ -2,6 +2,11 @@
  * Analysis Service - Business logic for data analysis and statistics calculation
  */
 class AnalysisService {
+  shouldIncludeInAnalysis(issue) {
+    const status = issue?.fa_status ? String(issue.fa_status).toLowerCase().trim() : '';
+    return status !== 'retest pass';
+  }
+
   /**
    * Calculate comprehensive analysis for a project
    * 根据筛选条件计算样本总数
@@ -16,9 +21,7 @@ class AnalysisService {
     ]);
 
     // 排除 FA Status 为 "retest pass" 的 issues
-    const allIssues = issues.issues.filter(issue => 
-      issue.fa_status && issue.fa_status.toLowerCase() !== 'retest pass'
-    );
+    const allIssues = issues.issues.filter((issue) => this.shouldIncludeInAnalysis(issue));
 
     // Build WF -> Sample Size mapping
     const wfSampleMap = this.buildWFSampleMap(sampleSizes);
@@ -54,6 +57,16 @@ class AnalysisService {
       functionCosmeticStats,
       faStatusStats, // 新增
     };
+  }
+
+  normalizeTestName(name) {
+    if (!name) return '';
+    return String(name).replace(/\s+/g, ' ').trim();
+  }
+
+  normalizeConfigName(name) {
+    if (!name) return '';
+    return String(name).replace(/\s+/g, ' ').trim();
   }
 
   /**
@@ -97,7 +110,7 @@ class AnalysisService {
       wfSampleMap.forEach((sample, wf) => {
         if (sample.tests && Array.isArray(sample.tests)) {
           sample.tests.forEach((testObj) => {
-            const testName = testObj.testName;
+            const testName = this.normalizeTestName(testObj.testName);
             if (testName) {
               if (!testToWFsMap[testName]) {
                 testToWFsMap[testName] = new Set();
@@ -109,7 +122,7 @@ class AnalysisService {
       });
 
       failed_tests.forEach((testName) => {
-        const wfsForTest = testToWFsMap[testName];
+        const wfsForTest = testToWFsMap[this.normalizeTestName(testName)];
         if (wfsForTest) {
           wfsForTest.forEach(wf => targetWFs.add(wf));
         }
@@ -158,11 +171,22 @@ class AnalysisService {
     const map = new Map();
 
     sampleSizes.forEach((sample) => {
+      const normalizedTests = (sample.tests || [])
+        .map((t) => this.normalizeTestName(t?.testName))
+        .filter((t) => t && t !== '/');
+      const testNameFromTests = Array.from(new Set(normalizedTests)).join(' + ');
+      const normalizedTestName = this.normalizeTestName(sample.test_name);
+      const normalizedConfigSamples = {};
+      Object.entries(sample.config_samples || {}).forEach(([key, value]) => {
+        const normalized = this.normalizeConfigName(key);
+        if (!normalized) return;
+        normalizedConfigSamples[normalized] = (normalizedConfigSamples[normalized] || 0) + (Number(value) || 0);
+      });
       map.set(sample.waterfall, {
         tests: sample.tests,
-        testName: sample.test_name || '', // 添加 testName
-        configSamples: sample.config_samples,
-        totalSamples: Object.values(sample.config_samples).reduce((sum, val) => sum + val, 0),
+        testName: normalizedTestName || testNameFromTests,
+        configSamples: normalizedConfigSamples,
+        totalSamples: Object.values(normalizedConfigSamples).reduce((sum, val) => sum + val, 0),
       });
     });
 
@@ -327,7 +351,16 @@ class AnalysisService {
         // 根据筛选条件计算该WF的样本数
         const totalSamples = this.calculateWFSampleSize(stat.wf, wfSampleMap, filters);
         const sample = wfSampleMap.get(stat.wf);
-        const testName = sample ? sample.testName : ''; // 从 WF Sample Size 获取 test name
+        let testName = sample ? sample.testName : ''; // 从 WF Sample Size 获取 test name
+        if (!testName) {
+          const uniqueFailedTests = new Set();
+          issues.forEach((issue) => {
+            if (issue.wf !== stat.wf) return;
+            const normalized = this.normalizeTestName(issue.failed_test);
+            if (normalized) uniqueFailedTests.add(normalized);
+          });
+          testName = Array.from(uniqueFailedTests).slice(0, 3).join(' + ');
+        }
 
         // Top symptoms
         const topSymptoms = Array.from(stat.symptoms.entries())
@@ -362,20 +395,6 @@ class AnalysisService {
           configBreakdown,
         };
 
-        // 调试日志：打印 WF39 的详细信息
-        if (stat.wf === '39') {
-          console.log(`\n🔍 WF39 详细信息:`);
-          console.log(`  总Issue数: ${stat.count}`);
-          console.log(`  Spec issue数: ${issues.filter(i => i.wf === '39' && i.failure_type === 'Spec.').length}`);
-          console.log(`  去重后Spec SN数: ${stat.specSNs.size}`);
-          console.log(`  Spec SNs: ${Array.from(stat.specSNs).join(', ')}`);
-          const specIssuesInWF39 = issues.filter(i => i.wf === '39' && i.failure_type === 'Spec.');
-          console.log(`  WF39中Spec issue的SN分布:`);
-          specIssuesInWF39.forEach(issue => {
-            console.log(`    SN: "${issue.sn}", FA_NUMBER: "${issue.fa_number}", Symptom: ${issue.symptom}`);
-          });
-        }
-
         return result;
       })
       .sort((a, b) => b.specFailureRate - a.specFailureRate); // 按Spec失败率排序
@@ -389,8 +408,16 @@ class AnalysisService {
    */
   calculateConfigStats(issues, wfSampleMap, filters = {}) {
     const configMap = new Map();
-    // 定义所有可能的Config
-    const allConfigs = ['R1CASN', 'R2CBCN', 'R3CBCN', 'R4FNSN'];
+    const configSet = new Set();
+    wfSampleMap.forEach((sample) => {
+      Object.keys(sample?.configSamples || {}).forEach((name) => {
+        if (name) configSet.add(name);
+      });
+    });
+    issues.forEach((issue) => {
+      if (issue?.config) configSet.add(issue.config);
+    });
+    const allConfigs = Array.from(configSet).sort();
 
     // 初始化所有Config
     allConfigs.forEach(config => {
@@ -405,9 +432,6 @@ class AnalysisService {
 
     issues.forEach((issue) => {
       if (!issue.config || !issue.wf) return;
-
-      // 只处理已知的Config
-      if (!configMap.has(issue.config)) return;
 
       const stat = configMap.get(issue.config);
       stat.count++;
@@ -430,7 +454,7 @@ class AnalysisService {
       wfSampleMap.forEach((sample, wf) => {
         if (sample.tests && Array.isArray(sample.tests)) {
           sample.tests.forEach((testObj) => {
-            const testName = testObj.testName;
+            const testName = this.normalizeTestName(testObj.testName);
             if (testName) {
               if (!testToWFsMap[testName]) {
                 testToWFsMap[testName] = new Set();
@@ -442,7 +466,7 @@ class AnalysisService {
       });
       
       failed_tests.forEach((testName) => {
-        const wfsForTest = testToWFsMap[testName];
+        const wfsForTest = testToWFsMap[this.normalizeTestName(testName)];
         if (wfsForTest) {
           wfsForTest.forEach(wf => targetWFs.add(wf));
         }
@@ -506,14 +530,15 @@ class AnalysisService {
 
     // 按testName分组，而不是按wf+testId分组
     issues.forEach((issue) => {
-      if (!issue.test_id || !issue.failed_test) return;
+      if (!issue.failed_test) return;
 
-      const testName = issue.failed_test;
+      const testName = this.normalizeTestName(issue.failed_test);
+      if (!testName) return;
       
       if (!testMap.has(testName)) {
         testMap.set(testName, {
           testName: testName,
-          testId: issue.test_id,
+          testId: issue.test_id || null,
           count: 0,
           specSNs: new Set(),  // 基于 SN 去重
           strifeSNs: new Set(),  // 基于 SN 去重
@@ -529,32 +554,50 @@ class AnalysisService {
       if (issue.wf) stat.wfs.add(issue.wf);
     });
 
-    // Calculate failure rate for each test with independent total samples
+    const testToWFsMap = {};
+    wfSampleMap.forEach((sample, wf) => {
+      if (sample.tests && Array.isArray(sample.tests)) {
+        sample.tests.forEach((testObj) => {
+          const testName = this.normalizeTestName(testObj.testName);
+          if (!testName) return;
+          if (!testToWFsMap[testName]) testToWFsMap[testName] = new Set();
+          testToWFsMap[testName].add(wf);
+        });
+      }
+    });
+
     return Array.from(testMap.values())
       .map((stat) => {
-        // 为每个测试项独立计算总样品数
-        // 找出包含这个测试的所有WF，然后根据筛选条件计算样品总数
-        const testSpecificFilters = { ...filters };
-        if (!testSpecificFilters.wfs || testSpecificFilters.wfs.length === 0) {
-          // 如果没有WF筛选条件，使用该测试涉及的所有WF
-          testSpecificFilters.wfs = Array.from(stat.wfs);
+        const normalizedName = this.normalizeTestName(stat.testName);
+
+        let displayWFs = testToWFsMap[normalizedName]
+          ? Array.from(testToWFsMap[normalizedName])
+          : Array.from(stat.wfs);
+        if (filters.wfs && filters.wfs.length > 0) {
+          const filteredWFs = new Set(filters.wfs);
+          displayWFs = displayWFs.filter((wf) => filteredWFs.has(wf));
+        }
+        displayWFs.sort((a, b) => Number(a) - Number(b));
+
+        let testTotalSamples = 0;
+        if (testToWFsMap[normalizedName] && testToWFsMap[normalizedName].size > 0) {
+          const testSpecificFilters = { ...filters, failed_tests: [stat.testName] };
+          testTotalSamples = this.calculateTotalSamples(wfSampleMap, testSpecificFilters);
         } else {
-          // 如果有WF筛选条件，取交集
-          const filteredWFs = new Set(testSpecificFilters.wfs);
-          testSpecificFilters.wfs = Array.from(stat.wfs).filter(wf => filteredWFs.has(wf));
+          const fallbackFilters = { ...filters };
+          delete fallbackFilters.failed_tests;
+          fallbackFilters.wfs = displayWFs;
+          testTotalSamples = this.calculateTotalSamples(wfSampleMap, fallbackFilters);
         }
         
-        // 计算该测试项的总样品数
-        const testTotalSamples = this.calculateTotalSamples(wfSampleMap, testSpecificFilters);
-        
         // specCount 和 strifeCount 直接计数，不去重
-        const specCount = issues.filter(i => i.failed_test === stat.testName && i.failure_type === 'Spec.').length;
-        const strifeCount = issues.filter(i => i.failed_test === stat.testName && i.failure_type === 'Strife').length;
+        const specCount = issues.filter(i => this.normalizeTestName(i.failed_test) === stat.testName && i.failure_type === 'Spec.').length;
+        const strifeCount = issues.filter(i => this.normalizeTestName(i.failed_test) === stat.testName && i.failure_type === 'Strife').length;
         
         return {
           testName: stat.testName,
           testId: stat.testId,
-          wfs: Array.from(stat.wfs).join(', '), // 昺示所有包含该test的WF
+          wfs: displayWFs.join(', '),
           failureCount: stat.count,
           specCount: specCount,  // 直接计数，不去重
           strifeCount: strifeCount,  // 直接计数，不去重
@@ -644,7 +687,7 @@ class AnalysisService {
     const parseArrayParam = (value) => {
       if (!value) return undefined;
       if (Array.isArray(value)) return value;
-      if (typeof value === 'string') return value.split(',');
+      if (typeof value === 'string') return value.split(',').map((v) => v.trim()).filter(Boolean);
       return undefined;
     };
     
@@ -670,7 +713,7 @@ class AnalysisService {
       wfSampleMap.forEach((sample, wf) => {
         if (sample.tests && Array.isArray(sample.tests)) {
           sample.tests.forEach((testObj) => {
-            const testName = testObj.testName;
+            const testName = this.normalizeTestName(testObj.testName);
             if (testName) {
               if (!testToWFsMap[testName]) {
                 testToWFsMap[testName] = new Set();
@@ -682,7 +725,7 @@ class AnalysisService {
       });
       
       failed_tests.forEach((testName) => {
-        const wfsForTest = testToWFsMap[testName];
+        const wfsForTest = testToWFsMap[this.normalizeTestName(testName)];
         if (wfsForTest) {
           wfsForTest.forEach(wf => targetWFs.add(wf));
         }
@@ -704,7 +747,18 @@ class AnalysisService {
     // ... existing code ...
     // 根据维度和筛选条件计算样本数
     const configTotalSampleMap = new Map();
-    const allConfigs = ['R1CASN', 'R2CBCN', 'R3CBCN', 'R4FNSN'];
+    const configSet = new Set();
+    wfSampleMap.forEach((sample) => {
+      Object.keys(sample?.configSamples || {}).forEach((name) => {
+        const normalized = this.normalizeConfigName(name);
+        if (normalized) configSet.add(normalized);
+      });
+    });
+    issues.forEach((issue) => {
+      const normalized = this.normalizeConfigName(issue?.config);
+      if (normalized) configSet.add(normalized);
+    });
+    const allConfigs = Array.from(configSet);
     
     // 为每个 Config 计算在目标 WF 范围内的样本数
     allConfigs.forEach(config => {
@@ -721,7 +775,7 @@ class AnalysisService {
     // 如果有 Config 筛选，则只使用筛选中的 Config
     let targetConfigs = null;
     if (configs && configs.length > 0) {
-      targetConfigs = new Set(configs);
+      targetConfigs = new Set(configs.map((c) => this.normalizeConfigName(c)).filter(Boolean));
     }
 
     // Group by two dimensions
@@ -761,7 +815,7 @@ class AnalysisService {
       
       if (dimension2 === 'config') {
         // 维度2是Config：计算该Config在目标WF范围内的总样本数
-        totalSamples = configTotalSampleMap.get(cell.dimension2Value) || 0;
+        totalSamples = configTotalSampleMap.get(this.normalizeConfigName(cell.dimension2Value)) || 0;
       } else if (dimension2 === 'wf') {
         // 维度2是WF：计算该WF的总样本数（需考虑Config筛选）
         const sample = wfSampleMap.get(cell.dimension2Value);
@@ -782,7 +836,7 @@ class AnalysisService {
         wfSampleMap.forEach((sample, wf) => {
           if (sample.tests && Array.isArray(sample.tests)) {
             sample.tests.forEach((testObj) => {
-              const testName = testObj.testName;
+              const testName = this.normalizeTestName(testObj.testName);
               if (testName) {
                 if (!testToWFsMap[testName]) {
                   testToWFsMap[testName] = [];
@@ -793,7 +847,7 @@ class AnalysisService {
           }
         });
         
-        const wfsForThisTest = testToWFsMap[cell.dimension2Value] || [];
+        const wfsForThisTest = testToWFsMap[this.normalizeTestName(cell.dimension2Value)] || [];
         wfsForThisTest.forEach(({ wf, sample }) => {
           if (targetConfigs) {
             targetConfigs.forEach(config => {
@@ -878,10 +932,7 @@ class AnalysisService {
     console.log(`  Total input issues: ${issues.length}`);
     console.log(`  Filters: date_from=${filters.date_from}, date_to=${filters.date_to}`);
 
-    // 排除 FA Status 为 "retest pass" 的 issues
-    const validIssues = issues.filter(issue => 
-      issue.fa_status && issue.fa_status.toLowerCase() !== 'retest pass'
-    );
+    const validIssues = issues.filter((issue) => this.shouldIncludeInAnalysis(issue));
     
     console.log(`  After excluding 'retest pass': ${validIssues.length} issues`);
     if (validIssues.length > 0) {

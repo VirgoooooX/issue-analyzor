@@ -30,7 +30,9 @@ async function parseExcelFile(filePath) {
     }
     console.log('✅ Found WF Sample Size sheet:', sampleSizeSheetName);
     const sampleSizeSheet = workbook.Sheets[sampleSizeSheetName];
-    const { sampleSizes, configNames } = parseSampleSizes(sampleSizeSheet);
+    const { sampleSizes, configNames: rawConfigNames } = parseSampleSizes(sampleSizeSheet);
+    const configNames =
+      rawConfigNames.length === 0 ? Array.from(new Set(issues.map((i) => i.config).filter(Boolean))).sort() : rawConfigNames;
 
     // Match Failed Test with Test IDs
     const issuesWithTestId = matchFailedTests(issues, sampleSizes);
@@ -59,8 +61,7 @@ function parseSystemTF(sheet) {
   const issues = [];
   const range = XLSX.utils.decode_range(sheet['!ref']);
 
-  // 读取表头行并构建动态映射
-  const headerRow = config.excel.headerRow - 1;
+  const headerRow = detectSystemTFHeaderRow(sheet, range);
   const columnMapping = {};
   
   console.log('📋 System TF Sheet - Building column mapping:');
@@ -80,8 +81,7 @@ function parseSystemTF(sheet) {
     }
   }
 
-  // Start from data row (row 8, 0-indexed as 7)
-  for (let rowNum = config.excel.dataStartRow - 1; rowNum <= range.e.r; rowNum++) {
+  for (let rowNum = headerRow + 1; rowNum <= range.e.r; rowNum++) {
     const row = {};
     let hasData = false;
 
@@ -118,6 +118,30 @@ function parseSystemTF(sheet) {
   }
 
   return issues;
+}
+
+function detectSystemTFHeaderRow(sheet, range) {
+  const maxRow = Math.min(range.e.r, 60);
+  let bestRow = config.excel.headerRow - 1;
+  let bestScore = -1;
+  for (let rowNum = 0; rowNum <= maxRow; rowNum++) {
+    const mapped = new Set();
+    for (let colNum = 0; colNum <= range.e.c; colNum++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: rowNum, c: colNum });
+      const cell = sheet[cellAddress];
+      const headerValue = cell ? String(cell.v).trim() : null;
+      if (!headerValue) continue;
+      const fieldName = getFieldNameByHeader(headerValue);
+      if (fieldName) mapped.add(fieldName);
+    }
+    const score = mapped.size;
+    if (score > bestScore && mapped.has('faNumber') && score >= 5) {
+      bestScore = score;
+      bestRow = rowNum;
+    }
+  }
+  console.log(`📍 System TF detected header row: ${bestRow + 1}`);
+  return bestRow;
 }
 
 /**
@@ -263,53 +287,75 @@ function parseSampleSizes(sheet) {
   const sampleSizes = [];
   const range = XLSX.utils.decode_range(sheet['!ref']);
 
-  // Extract config names from header row (row 1, 0-indexed as 0)
-  const configNames = [];
-  for (let colNum = 2; colNum <= range.e.c; colNum++) {
-    const cellAddress = XLSX.utils.encode_cell({ r: 0, c: colNum });
-    const cell = sheet[cellAddress];
-    if (cell && cell.v) {
-      configNames.push(String(cell.v).trim());
-    }
+  const headerRow = detectWFSampleSizeHeaderRow(sheet, range);
+  const headerValues = [];
+  for (let colNum = 0; colNum <= range.e.c; colNum++) {
+    const cell = sheet[XLSX.utils.encode_cell({ r: headerRow, c: colNum })];
+    headerValues.push(cell?.v ? String(cell.v).trim() : '');
   }
 
-  // Parse data rows (starting from row 2, 0-indexed as 1)
-  for (let rowNum = 1; rowNum <= range.e.r; rowNum++) {
+  const testColumnIndexes = [];
+  for (let colNum = 1; colNum <= range.e.c; colNum++) {
+    const header = headerValues[colNum];
+    if (!header) break;
+    if (/^test\s*\d+$/i.test(header)) {
+      testColumnIndexes.push(colNum);
+      continue;
+    }
+    break;
+  }
+
+  const configStartCol = testColumnIndexes.length > 0 ? testColumnIndexes[testColumnIndexes.length - 1] + 1 : 1;
+  const configNames = headerValues.slice(configStartCol).filter(Boolean);
+
+  for (let rowNum = headerRow + 1; rowNum <= range.e.r; rowNum++) {
     const wfCell = sheet[XLSX.utils.encode_cell({ r: rowNum, c: 0 })];
-    const testNameCell = sheet[XLSX.utils.encode_cell({ r: rowNum, c: 1 })];
-
-    if (!wfCell || !wfCell.v) continue;
-
+    if (!wfCell?.v) continue;
     const waterfall = String(wfCell.v).trim();
-    const testName = testNameCell && testNameCell.v ? String(testNameCell.v).trim() : '';
+    if (!waterfall) continue;
 
-    // Split Test Name by "+" and trim each test
-    const tests = testName
-      .split('+')
-      .map((test, index) => ({
-        testId: `Test${index + 1}`,
-        testName: test.trim(),
-        index,
-      }))
-      .filter((test) => test.testName);
+    const tests = testColumnIndexes
+      .map((colNum, index) => {
+        const cell = sheet[XLSX.utils.encode_cell({ r: rowNum, c: colNum })];
+        const value = cell?.v ? String(cell.v).trim() : '';
+        if (!value || value === '/') return null;
+        return { testId: `Test${index + 1}`, testName: value, index };
+      })
+      .filter(Boolean);
 
-    // Extract config samples
     const configSamples = {};
-    configNames.forEach((configName, index) => {
-      const colNum = 2 + index;
+    configNames.forEach((configName, idx) => {
+      const colNum = configStartCol + idx;
       const cell = sheet[XLSX.utils.encode_cell({ r: rowNum, c: colNum })];
-      configSamples[configName] = cell && cell.v ? Number(cell.v) : 0;
+      const value = cell?.v;
+      configSamples[configName] = value === null || value === undefined || value === '' ? 0 : Number(value);
     });
 
     sampleSizes.push({
       waterfall,
-      testName,
+      testName: tests.map((t) => t.testName).join('+'),
       tests: JSON.stringify(tests),
       configSamples: JSON.stringify(configSamples),
     });
   }
 
   return { sampleSizes, configNames };
+}
+
+function detectWFSampleSizeHeaderRow(sheet, range) {
+  const maxRow = Math.min(range.e.r, 20);
+  for (let rowNum = 0; rowNum <= maxRow; rowNum++) {
+    const a = sheet[XLSX.utils.encode_cell({ r: rowNum, c: 0 })]?.v;
+    const b = sheet[XLSX.utils.encode_cell({ r: rowNum, c: 1 })]?.v;
+    const c = sheet[XLSX.utils.encode_cell({ r: rowNum, c: 2 })]?.v;
+    const v0 = a ? String(a).trim().toLowerCase() : '';
+    const v1 = b ? String(b).trim().toLowerCase() : '';
+    const v2 = c ? String(c).trim().toLowerCase() : '';
+    if (v0 === 'wf' && v1.startsWith('test') && v2.startsWith('test')) {
+      return rowNum;
+    }
+  }
+  return 0;
 }
 
 /**
@@ -390,6 +436,12 @@ function parseExcelDate(excelDate) {
     const year = date.y.toString().padStart(4, '0');
     const month = String(date.m).padStart(2, '0');
     const day = String(date.d).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  if (excelDate instanceof Date) {
+    const year = String(excelDate.getFullYear()).padStart(4, '0');
+    const month = String(excelDate.getMonth() + 1).padStart(2, '0');
+    const day = String(excelDate.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   }
   return excelDate;

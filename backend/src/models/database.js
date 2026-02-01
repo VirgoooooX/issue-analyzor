@@ -136,6 +136,12 @@ async function forceSaveDatabase() {
 async function runMigrations() {
   try {
     const migrations = [
+      `ALTER TABLE projects ADD COLUMN project_key TEXT;`,
+      `ALTER TABLE projects ADD COLUMN phase TEXT;`,
+      `ALTER TABLE projects ADD COLUMN last_issue_date DATE;`,
+      `CREATE INDEX IF NOT EXISTS idx_projects_project_key ON projects(project_key);`,
+      `CREATE INDEX IF NOT EXISTS idx_projects_phase ON projects(phase);`,
+      `CREATE INDEX IF NOT EXISTS idx_projects_last_issue_date ON projects(last_issue_date);`,
       // Add sn column if it doesn't exist
       `ALTER TABLE issues ADD COLUMN sn TEXT;`,
       // Add unit_number column if it doesn't exist
@@ -209,6 +215,9 @@ function getDatabase() {
           try {
             const result = db.exec('SELECT last_insert_rowid()');
             lastInsertRowid = result[0]?.values[0]?.[0];
+            if (typeof lastInsertRowid === 'bigint') {
+              lastInsertRowid = Number(lastInsertRowid);
+            }
           } catch (e) {
             lastInsertRowid = undefined;
           }

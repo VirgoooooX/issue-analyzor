@@ -74,6 +74,18 @@ test('管理员可创建/查询/修改/删除用户（删除级联 saved_filters
     assert.equal(res.body.data.status, 'active');
   }
 
+  {
+    const managerUsername = uniqueName('manager');
+    const req = { user: { id: adminId }, body: { username: managerUsername, password: 'p@ss', role: 'manager' } };
+    const res = createMockRes();
+    await controller.createUser(req, res, () => {});
+    assert.equal(res.statusCode, 201);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.data.username, managerUsername);
+    assert.equal(res.body.data.role, 'manager');
+    assert.equal(res.body.data.status, 'active');
+  }
+
   const created = db.prepare('SELECT id, role, status FROM users WHERE username = ?').get(username);
   assert.ok(created?.id);
   assert.equal(created.role, 'user');

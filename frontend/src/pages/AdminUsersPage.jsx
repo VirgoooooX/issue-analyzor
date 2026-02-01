@@ -48,7 +48,11 @@ function AdminUsersPage() {
         title: '角色',
         dataIndex: 'role',
         key: 'role',
-        render: (role) => (role === 'admin' ? <Tag color="red">admin</Tag> : <Tag>user</Tag>),
+        render: (role) => {
+          if (role === 'admin') return <Tag color="red">admin</Tag>;
+          if (role === 'manager') return <Tag color="blue">manager</Tag>;
+          return <Tag>user</Tag>;
+        },
       },
       {
         title: '状态',
@@ -244,6 +248,7 @@ function AdminUsersPage() {
             <Select
               options={[
                 { label: 'user', value: 'user' },
+                { label: 'manager', value: 'manager' },
                 { label: 'admin', value: 'admin' },
               ]}
             />
@@ -284,6 +289,7 @@ function AdminUsersPage() {
             <Select
               options={[
                 { label: 'user', value: 'user' },
+                { label: 'manager', value: 'manager' },
                 { label: 'admin', value: 'admin' },
               ]}
             />

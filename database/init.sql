@@ -8,8 +8,11 @@
 CREATE TABLE IF NOT EXISTS projects (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
+    project_key TEXT,
+    phase TEXT,
     file_name TEXT,
     upload_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_issue_date DATE,
     uploader TEXT,
     status TEXT DEFAULT 'active',  -- active/archived/deleted
     total_issues INTEGER DEFAULT 0,

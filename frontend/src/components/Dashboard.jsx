@@ -1252,6 +1252,7 @@ function AnalysisView({
               <p><strong>项目名称:</strong> {projectInfo.name}</p>
               <p><strong>文件名:</strong> {projectInfo.file_name}</p>
               <p><strong>上传时间:</strong> {new Date(projectInfo.upload_time).toLocaleString()}</p>
+              <p><strong>最后Issue日期:</strong> {projectInfo.last_issue_date || '-'}</p>
               <p>
                 <strong>Config列表:</strong> {projectInfo.config_names?.join(', ')}
               </p>

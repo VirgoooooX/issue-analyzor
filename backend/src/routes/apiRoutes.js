@@ -4,6 +4,7 @@ const router = express.Router();
 // Import controllers
 const projectController = require('../controllers/projectController');
 const analysisController = require('../controllers/analysisController');
+const requirePowerUser = require('../middleware/requirePowerUser');
 
 // Project routes
 router.get('/', projectController.getProjects);
@@ -12,6 +13,7 @@ router.post('/',
     console.log('📦 POST /api/projects - Request received');
     next();
   },
+  requirePowerUser,
   projectController.upload.single('file'), 
   (err, req, res, next) => {
     if (err) {

@@ -9,7 +9,7 @@ function hashPassword(password) {
 
 function normalizeRole(role) {
   if (!role) return 'user';
-  if (role === 'admin' || role === 'user') return role;
+  if (role === 'admin' || role === 'manager' || role === 'user') return role;
   return null;
 }
 

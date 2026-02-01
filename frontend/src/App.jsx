@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ConfigProvider, Layout, Spin, Empty, Button } from 'antd';
+import { ConfigProvider, Layout } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import Header from './components/Header';
-import DashboardPage from './pages/DashboardPage';
+import BuildDashboardPage from './pages/BuildDashboardPage';
+import KpiDashboardPage from './pages/KpiDashboardPage';
 import FilterResultsPage from './pages/FilterResultsPage';
 import FailureRateMatrixPage from './pages/FailureRateMatrixPage';
 import LoginPage from './pages/LoginPage';
@@ -14,8 +15,8 @@ import useStore from './store';
 const { Content } = Layout;
 
 function App() {
-  const { projects, loadProjects, setUploadModalOpen, selectProject, auth, checkAuthStatus } = useStore();
-  const { list, current, loading } = projects;
+  const { projects, loadProjects, selectProject, auth, checkAuthStatus } = useStore();
+  const { current } = projects;
   const { isAuthenticated } = auth;
 
   console.log('🔍 Rendering App, auth state:', auth);
@@ -54,39 +55,15 @@ function App() {
               <Routes>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/admin/users" element={<AdminUsersPage />} />
-                <Route
-                  path="/dashboard"
-                  element={
-                    current ? (
-                      <DashboardPage />
-                    ) : loading ? (
-                      <div style={{ textAlign: 'center', padding: '100px 0' }}>
-                        <Spin size="large" tip="Loading..." />
-                      </div>
-                    ) : list.length === 0 ? (
-                      <Empty description="暂无项目，请上传Excel文件创建第一个项目" style={{ marginTop: '100px' }}>
-                        <Button type="primary" size="large" onClick={() => setUploadModalOpen(true)}>
-                          上传项目
-                        </Button>
-                      </Empty>
-                    ) : (
-                      <Empty description="请选择一个项目" style={{ marginTop: '100px' }} />
-                    )
-                  }
-                />
+                <Route path="/dashboard" element={<KpiDashboardPage />} />
+                <Route path="/build/:id" element={<BuildDashboardPage />} />
                 <Route
                   path="/filter-results"
                   element={
                     current ? (
                       <FilterResultsPage />
-                    ) : list.length === 0 ? (
-                      <Empty description="暂无项目，请上传Excel文件创建第一个项目" style={{ marginTop: '100px' }}>
-                        <Button type="primary" size="large" onClick={() => setUploadModalOpen(true)}>
-                          上传项目
-                        </Button>
-                      </Empty>
                     ) : (
-                      <Empty description="请选择一个项目" style={{ marginTop: '100px' }} />
+                      <Navigate to="/dashboard" replace />
                     )
                   }
                 />
@@ -95,14 +72,8 @@ function App() {
                   element={
                     current ? (
                       <FailureRateMatrixPage />
-                    ) : list.length === 0 ? (
-                      <Empty description="暂无项目，请上传Excel文件创建第一个项目" style={{ marginTop: '100px' }}>
-                        <Button type="primary" size="large" onClick={() => setUploadModalOpen(true)}>
-                          上传项目
-                        </Button>
-                      </Empty>
                     ) : (
-                      <Empty description="请选择一个项目" style={{ marginTop: '100px' }} />
+                      <Navigate to="/dashboard" replace />
                     )
                   }
                 />

@@ -9,14 +9,25 @@ class ProjectModel {
    */
   async createProject(projectData) {
     const db = getDatabase();
-    const { name, fileName, uploader, configNames, validationReport, totalIssues, uploadTime } = projectData;
+    const { name, projectKey, phase, fileName, uploader, configNames, validationReport, totalIssues, uploadTime, lastIssueDate } = projectData;
 
     const stmt = db.prepare(
-      `INSERT INTO projects (name, file_name, uploader, config_names, validation_report, total_issues, upload_time)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO projects (name, project_key, phase, file_name, uploader, config_names, validation_report, total_issues, upload_time, last_issue_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     
-    const result = stmt.run(name, fileName, uploader, JSON.stringify(configNames), JSON.stringify(validationReport), totalIssues, uploadTime);
+    const result = stmt.run(
+      name,
+      projectKey || null,
+      phase || null,
+      fileName,
+      uploader,
+      JSON.stringify(configNames),
+      JSON.stringify(validationReport),
+      totalIssues,
+      uploadTime,
+      lastIssueDate || null
+    );
 
     return result.lastInsertRowid;
   }
@@ -29,7 +40,7 @@ class ProjectModel {
     const offset = (page - 1) * limit;
 
     const projects = db.prepare(
-      `SELECT id, name, file_name, upload_time, uploader, status, total_issues, config_names
+      `SELECT id, name, project_key, phase, file_name, upload_time, last_issue_date, uploader, status, total_issues, config_names
        FROM projects
        WHERE status = ?
        ORDER BY upload_time DESC

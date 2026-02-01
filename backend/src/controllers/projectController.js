@@ -4,6 +4,7 @@ const fs = require('fs').promises;
 const config = require('../config');
 const projectModel = require('../models/projectModel');
 const { parseExcelFile } = require('../services/excelParser');
+const { parsePhaseFromFileName, deriveProjectKeyFromFileName } = require('../services/projectNaming');
 const cacheService = require('../services/cacheService');
 const { forceSaveDatabase } = require('../models/database');
 
@@ -121,6 +122,8 @@ async function createProject(req, res, next) {
     const fileName = req.file.originalname;
     const baseProjectName = req.body.name || path.parse(fileName).name;
     const uploader = req.body.uploader || null;
+    const phase = parsePhaseFromFileName(fileName);
+    const projectKey = deriveProjectKeyFromFileName(fileName) || baseProjectName;
 
     // 生成北京时间戳（UTC+8）
     const now = new Date();
@@ -138,18 +141,36 @@ async function createProject(req, res, next) {
     // Parse Excel file
     const { issues, sampleSizes, configNames, validationReport } = await parseExcelFile(uploadedFilePath);
 
-    console.log(`✅ Parsed ${issues.length} issues and ${sampleSizes.length} sample sizes`);
+
+    const lastIssueDate = issues
+      .map((i) => i.openDate)
+      .filter(Boolean)
+      .map((d) => {
+        if (typeof d === 'string') return d;
+        if (d instanceof Date) {
+          const year = String(d.getFullYear()).padStart(4, '0');
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        }
+        return String(d);
+      })
+      .sort()
+      .at(-1);
     console.log(`✅ Extracted ${configNames.length} config names: ${configNames.join(', ')}`);
 
     // Create project
     const projectId = await projectModel.createProject({
       name: projectName,
+      projectKey,
+      phase,
       fileName,
       uploader,
       configNames,
       validationReport,
       totalIssues: issues.length,
       uploadTime: versionTimestamp,  // 存储北京时间戳
+      lastIssueDate,
     });
 
     console.log(`✅ Created project ID: ${projectId}`);
@@ -180,6 +201,9 @@ async function createProject(req, res, next) {
       data: {
         project_id: projectId,
         name: project.name,
+        project_key: project.project_key,
+        phase: project.phase,
+        last_issue_date: project.last_issue_date,
         total_issues: project.total_issues,
         config_names: project.config_names,
         validation_report: project.validation_report,

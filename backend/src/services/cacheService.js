@@ -7,6 +7,7 @@ const crypto = require('crypto');
  */
 class CacheService {
   constructor() {
+    this.cacheVersion = 'v3';
     // 内存缓存 - LRU 策略
     this.memoryCache = new LRUCache({
       max: 100, // 最多缓存 100 个项目
@@ -37,12 +38,12 @@ class CacheService {
     
     // 如果筛选条件为空，使用简单键
     if (filtersStr === '{}') {
-      return `${prefix}:${projectId}`;
+      return `${this.cacheVersion}:${prefix}:${projectId}`;
     }
     
     // 使用哈希避免键过长
     const hash = crypto.createHash('md5').update(filtersStr).digest('hex').substring(0, 16);
-    return `${prefix}:${projectId}:${hash}`;
+    return `${this.cacheVersion}:${prefix}:${projectId}:${hash}`;
   }
 
   /**
