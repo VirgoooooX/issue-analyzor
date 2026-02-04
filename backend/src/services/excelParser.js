@@ -298,7 +298,7 @@ function parseSampleSizes(sheet) {
   for (let colNum = 1; colNum <= range.e.c; colNum++) {
     const header = headerValues[colNum];
     if (!header) break;
-    if (/^test\s*\d+$/i.test(header)) {
+    if (/^test[\s_-]*\d+$/i.test(header)) {
       testColumnIndexes.push(colNum);
       continue;
     }
@@ -328,7 +328,12 @@ function parseSampleSizes(sheet) {
       const colNum = configStartCol + idx;
       const cell = sheet[XLSX.utils.encode_cell({ r: rowNum, c: colNum })];
       const value = cell?.v;
-      configSamples[configName] = value === null || value === undefined || value === '' ? 0 : Number(value);
+      if (value === null || value === undefined || value === '' || value === '/') {
+        configSamples[configName] = 0;
+      } else {
+        const numberValue = Number(value);
+        configSamples[configName] = Number.isFinite(numberValue) ? numberValue : 0;
+      }
     });
 
     sampleSizes.push({

@@ -1070,6 +1070,123 @@ class AnalysisService {
       };
     }).sort((a, b) => b.totalCount - a.totalCount);
 
+    // Failed Test distribution
+    const failedTestMap = new Map();
+    validIssues.forEach((issue) => {
+      const testName = this.normalizeTestName(issue.failed_test);
+      if (!testName) return;
+      if (!failedTestMap.has(testName)) {
+        failedTestMap.set(testName, {
+          totalCount: 0,
+          specCount: 0,
+          strifeCount: 0,
+          specSNs: new Set(),
+          strifeSNs: new Set(),
+        });
+      }
+      const data = failedTestMap.get(testName);
+      data.totalCount++;
+      const sn = issue.sn || issue.fa_number;
+      if (issue.failure_type === 'Spec.') {
+        data.specCount++;
+        if (sn) data.specSNs.add(sn);
+      } else if (issue.failure_type === 'Strife') {
+        data.strifeCount++;
+        if (sn) data.strifeSNs.add(sn);
+      }
+    });
+
+    const testToWFsMap = {};
+    wfSampleMap.forEach((sample, wf) => {
+      if (sample.tests && Array.isArray(sample.tests)) {
+        sample.tests.forEach((testObj) => {
+          const testName = this.normalizeTestName(testObj.testName);
+          if (!testName) return;
+          if (!testToWFsMap[testName]) testToWFsMap[testName] = new Set();
+          testToWFsMap[testName].add(wf);
+        });
+      }
+    });
+
+    const failedTestDistribution = Array.from(failedTestMap.entries())
+      .map(([testName, data]) => {
+        let displayWFs = testToWFsMap[testName] ? Array.from(testToWFsMap[testName]) : [];
+        if (normalizedFilters.wfs && normalizedFilters.wfs.length > 0) {
+          const wfsSet = new Set(normalizedFilters.wfs);
+          displayWFs = displayWFs.filter((wf) => wfsSet.has(wf));
+        }
+        displayWFs.sort((a, b) => Number(a) - Number(b));
+
+        let testTotalSamples = 0;
+        if (testToWFsMap[testName] && testToWFsMap[testName].size > 0) {
+          const testSpecificFilters = { ...normalizedFilters, failed_tests: [testName] };
+          testTotalSamples = this.calculateTotalSamples(wfSampleMap, testSpecificFilters);
+        } else if (displayWFs.length > 0) {
+          const fallbackFilters = { ...normalizedFilters };
+          delete fallbackFilters.failed_tests;
+          fallbackFilters.wfs = displayWFs;
+          testTotalSamples = this.calculateTotalSamples(wfSampleMap, fallbackFilters);
+        }
+
+        return {
+          testName,
+          totalCount: data.totalCount,
+          specCount: data.specCount,
+          strifeCount: data.strifeCount,
+          specSNCount: data.specSNs.size,
+          strifeSNCount: data.strifeSNs.size,
+          totalSamples: testTotalSamples,
+          wfs: displayWFs.join(', '),
+          percentage: totalCount > 0 ? parseFloat(((data.totalCount / totalCount) * 100).toFixed(2)) : 0,
+          specRate: testTotalSamples > 0 ? `${data.specSNs.size}F/${testTotalSamples}T` : 'N/A',
+          strifeRate: testTotalSamples > 0 ? `${data.strifeSNs.size}SF/${testTotalSamples}T` : 'N/A',
+          specFailureRate: testTotalSamples > 0 ? Math.round((data.specSNs.size / testTotalSamples) * 1000000) : 0,
+        };
+      })
+      .sort((a, b) => b.specFailureRate - a.specFailureRate);
+
+    // Failed Location distribution
+    const failedLocationMap = new Map();
+    validIssues.forEach((issue) => {
+      const location = issue.failed_location ? String(issue.failed_location).trim() : '';
+      if (!location) return;
+      if (!failedLocationMap.has(location)) {
+        failedLocationMap.set(location, {
+          totalCount: 0,
+          specCount: 0,
+          strifeCount: 0,
+          specSNs: new Set(),
+          strifeSNs: new Set(),
+        });
+      }
+      const data = failedLocationMap.get(location);
+      data.totalCount++;
+      const sn = issue.sn || issue.fa_number;
+      if (issue.failure_type === 'Spec.') {
+        data.specCount++;
+        if (sn) data.specSNs.add(sn);
+      } else if (issue.failure_type === 'Strife') {
+        data.strifeCount++;
+        if (sn) data.strifeSNs.add(sn);
+      }
+    });
+
+    const failedLocationDistribution = Array.from(failedLocationMap.entries())
+      .map(([failedLocation, data]) => ({
+        failedLocation,
+        totalCount: data.totalCount,
+        specCount: data.specCount,
+        strifeCount: data.strifeCount,
+        specSNCount: data.specSNs.size,
+        strifeSNCount: data.strifeSNs.size,
+        totalSamples: globalTotalSamples,
+        percentage: totalCount > 0 ? parseFloat(((data.totalCount / totalCount) * 100).toFixed(2)) : 0,
+        specRate: globalTotalSamples > 0 ? `${data.specSNs.size}F/${globalTotalSamples}T` : 'N/A',
+        strifeRate: globalTotalSamples > 0 ? `${data.strifeSNs.size}SF/${globalTotalSamples}T` : 'N/A',
+        specFailureRate: globalTotalSamples > 0 ? Math.round((data.specSNs.size / globalTotalSamples) * 1000000) : 0,
+      }))
+      .sort((a, b) => b.specFailureRate - a.specFailureRate);
+
     // Failure type distribution
     const failureTypeDistribution = [
       {
@@ -1133,6 +1250,8 @@ class AnalysisService {
       symptomDistribution,
       wfDistribution,
       configDistribution,
+      failedTestDistribution,
+      failedLocationDistribution,
       failureTypeDistribution,
       functionCosmeticDistribution,
       faStatusDistribution,
