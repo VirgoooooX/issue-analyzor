@@ -139,6 +139,12 @@ async function listProjects(params = {}) {
   return out;
 }
 
+async function listProjectsAll() {
+  const active = await listProjects({ status: "active" });
+  const archived = await listProjects({ status: "archived" });
+  return [...active, ...archived];
+}
+
 function parseUploadTime(s) {
   if (!s) return 0;
   const t = Date.parse(String(s));
@@ -152,14 +158,52 @@ function selectProject(projects, { projectId, projectKey, phase, nameContains } 
     if (!found) throw new Error(`projectId not found: ${projectId}`);
     return found;
   }
+
+  const norm = (v) => String(v || "").trim().toLowerCase();
+  const wantKey = projectKey ? norm(projectKey) : "";
+  const wantPhase = phase ? norm(phase) : "";
+  const wantNameContains = nameContains ? norm(nameContains) : "";
+
   let candidates = projects.slice();
-  if (projectKey) candidates = candidates.filter((p) => String(p?.project_key || "").trim() === String(projectKey).trim());
-  if (phase) candidates = candidates.filter((p) => String(p?.phase || "").trim() === String(phase).trim());
-  if (nameContains) {
-    const n = String(nameContains).trim().toLowerCase();
-    candidates = candidates.filter((p) => String(p?.name || "").toLowerCase().includes(n));
+
+  const exact = (p) => String(p?.project_key || "").trim() === String(projectKey || "").trim() && String(p?.phase || "").trim() === String(phase || "").trim();
+
+  if (projectKey && phase) {
+    candidates = candidates.filter((p) => exact(p));
+    if (candidates.length === 0) {
+      candidates = projects.filter((p) => norm(p?.project_key) === wantKey && norm(p?.phase) === wantPhase);
+    }
+    if (candidates.length === 0) {
+      candidates = projects.filter((p) => norm(p?.name).includes(wantKey) && norm(p?.phase) === wantPhase);
+    }
+  } else if (projectKey) {
+    candidates = candidates.filter((p) => norm(p?.project_key) === wantKey || norm(p?.name).includes(wantKey));
+  } else if (phase) {
+    candidates = candidates.filter((p) => norm(p?.phase) === wantPhase);
   }
-  if (candidates.length === 0) throw new Error("No project matched selection criteria");
+
+  if (wantNameContains) {
+    candidates = candidates.filter((p) => norm(p?.name).includes(wantNameContains));
+  }
+
+  if (candidates.length === 0) {
+    if (projectKey && phase) {
+      const byKey = projects.filter((p) => norm(p?.project_key) === wantKey || norm(p?.name).includes(wantKey));
+      const phases = Array.from(new Set(byKey.map((p) => String(p?.phase || "").trim()).filter(Boolean))).sort();
+      const sample = byKey
+        .slice()
+        .sort((a, b) => parseUploadTime(b?.upload_time) - parseUploadTime(a?.upload_time))
+        .slice(0, 6)
+        .map((p) => `${p?.project_key || ""}|${p?.phase || ""} (id=${p?.id})`)
+        .join(", ");
+      const msg = phases.length
+        ? `No project matched selection criteria (projectKey=${projectKey}, phase=${phase}). Available phases for this projectKey: ${phases.join(", ")}. Latest snapshots: ${sample}`
+        : `No project matched selection criteria (projectKey=${projectKey}, phase=${phase}). This projectKey was not found in active/archived projects.`;
+      throw new Error(msg);
+    }
+    throw new Error("No project matched selection criteria");
+  }
+
   candidates.sort((a, b) => {
     const ta = parseUploadTime(a?.upload_time);
     const tb = parseUploadTime(b?.upload_time);
@@ -390,9 +434,17 @@ function mergeFilters(filters, extra) {
 }
 
 async function resolveProjectId(select) {
+  const input = normalizeProjectSelectInput(select);
   const projects = await listProjects({});
-  const p = selectProject(projects, normalizeProjectSelectInput(select));
-  return p.id;
+  try {
+    return selectProject(projects, input).id;
+  } catch (e) {
+    if (input.projectKey || input.phase || input.nameContains) {
+      const all = await listProjectsAll();
+      return selectProject(all, input).id;
+    }
+    throw e;
+  }
 }
 
 function response(content, structuredContent) {
@@ -582,7 +634,7 @@ server.registerTool(
 
     const contextId = makeContextId();
     if (input?.cache !== false) cacheSet(contextId, payload);
-    return response(_json({ contextId, ...payload }), { contextId, ...payload });
+    return response(_json({ contextId, ...payload }), { contextId });
   }
 );
 
@@ -637,7 +689,7 @@ server.registerTool(
 
       rows.sort((a, b) => phases.indexOf(a.phase) - phases.indexOf(b.phase));
       const out = { contextId: input?.contextId, filters, report, table: rows };
-      return response(_json(out), out);
+      return response(_json(out), { contextId: input?.contextId });
     }
 
     if (report.kind === "test_config_fr") {
@@ -694,7 +746,7 @@ server.registerTool(
         return (b.frPpm || 0) - (a.frPpm || 0);
       });
       const out = { contextId: input?.contextId, filters, report, table: rows };
-      return response(_json(out), out);
+      return response(_json(out), { contextId: input?.contextId });
     }
 
     throw new Error(`Unsupported report.kind: ${report.kind}`);
@@ -725,7 +777,7 @@ server.registerTool(
     if (nameContains) rows = rows.filter((p) => String(p?.name || "").toLowerCase().includes(String(nameContains).toLowerCase()));
     rows.sort((a, b) => parseUploadTime(b?.upload_time) - parseUploadTime(a?.upload_time));
     if (limit && limit > 0) rows = rows.slice(0, limit);
-    return response(_json(rows), { projects: rows });
+    return response(_json(rows), { count: rows.length });
   }
 );
 
@@ -740,16 +792,104 @@ server.registerTool(
     const { projectId, projectKey, phase, nameContains } = normalizeProjectSelectInput(input);
     const projects = await listProjects({});
     const p = selectProject(projects, { projectId, projectKey, phase, nameContains });
-    return response(_json(p), { project: p });
+    return response(_json(p), { projectId: p?.id });
   }
 );
 
 function _json(x) {
-  return JSON.stringify(x, null, 2);
+  return JSON.stringify(x);
+}
+
+const FormatSchema = z.enum(["csv", "json"]).optional();
+
+function csvEscape(value) {
+  if (value === undefined || value === null) return "";
+  const s = String(value);
+  if (s.includes('"') || s.includes(",") || s.includes("\n") || s.includes("\r")) return `"${s.replaceAll('"', '""')}"`;
+  return s;
+}
+
+function toCsv(header, rows) {
+  return [header.join(","), ...rows.map((r) => header.map((_, i) => csvEscape(r[i])).join(","))].join("\n");
+}
+
+function frCompactToCsv(data) {
+  if (!data || typeof data !== "object") return "";
+  if (String(data.groupBy || "none") === "none") return toCsv(["failures", "totalSamples"], [[data.failures || 0, data.totalSamples || 0]]);
+  const keys = Array.isArray(data.keys) ? data.keys : [];
+  const failures = Array.isArray(data.failures) ? data.failures : [];
+  const totalSamples = data.totalSamples;
+  const rows = keys.map((k, i) => [k, failures[i] || 0, Array.isArray(totalSamples) ? (totalSamples[i] || 0) : (totalSamples || 0)]);
+  return toCsv(["key", "failures", "totalSamples"], rows);
+}
+
+function sampleSizeCompactToCsv(data) {
+  if (!data || typeof data !== "object") return "";
+  const keys = Array.isArray(data.keys) ? data.keys : [];
+  const totalSamples = Array.isArray(data.totalSamples) ? data.totalSamples : [];
+  const rows = keys.map((k, i) => [k, totalSamples[i] || 0]);
+  return toCsv(["key", "totalSamples"], rows);
+}
+
+function distBundleToCsv(bundle) {
+  if (!bundle || typeof bundle !== "object") return "";
+  const rows = [];
+  if (bundle.overview) rows.push(["overview", "all", "__all__", bundle.overview.failures || 0, bundle.overview.totalSamples || 0]);
+  const dist = bundle.distributions && typeof bundle.distributions === "object" ? bundle.distributions : {};
+  for (const [dimension, v] of Object.entries(dist)) {
+    const keys = Array.isArray(v?.keys) ? v.keys : [];
+    const failures = Array.isArray(v?.failures) ? v.failures : [];
+    const totalSamples = v?.totalSamples;
+    for (let i = 0; i < keys.length; i++) {
+      rows.push(["dist", dimension, keys[i], failures[i] || 0, Array.isArray(totalSamples) ? (totalSamples[i] || 0) : (totalSamples || 0)]);
+    }
+  }
+  return toCsv(["table", "dimension", "key", "failures", "totalSamples"], rows);
+}
+
+function frMatrixCompactToCsv(payload) {
+  if (!payload || typeof payload !== "object") return "";
+  const snapshots = Array.isArray(payload.snapshots) ? payload.snapshots : [];
+  const configs = Array.isArray(payload.configs) ? payload.configs : [];
+  const rows = Array.isArray(payload.rows) ? payload.rows : [];
+  const out = [];
+  snapshots.forEach((s, i) => out.push(["snapshot", i, "", s, "", ""]));
+  configs.forEach((c, i) => out.push(["config", "", i, c, "", ""]));
+  rows.forEach((r) => out.push(["cell", r?.[0], r?.[1], "", r?.[2], r?.[3]]));
+  return toCsv(["table", "snapshotIndex", "configIndex", "label", "failures", "totalSamples"], out);
+}
+
+function crossCompactToCsv(payload) {
+  if (!payload || typeof payload !== "object") return "";
+  const d1 = Array.isArray(payload.dimension1Values) ? payload.dimension1Values : [];
+  const d2 = Array.isArray(payload.dimension2Values) ? payload.dimension2Values : [];
+  const denom = Array.isArray(payload.denomByDim2) ? payload.denomByDim2 : [];
+  const cells = Array.isArray(payload.cells) ? payload.cells : [];
+  const out = [];
+  d1.forEach((v, i) => out.push(["dim1", i, "", v, "", "", "", ""]));
+  d2.forEach((v, j) => out.push(["dim2", "", j, v, denom[j] || 0, "", "", ""]));
+  cells.forEach((c) => {
+    const i = c?.[0];
+    const j = c?.[1];
+    const specSN = c?.[2] || 0;
+    const strifeSN = c?.[3] || 0;
+    const issues = c?.[4] || 0;
+    const cellDenom = c?.length >= 6 ? (c?.[5] || 0) : "";
+    out.push(["cell", i, j, "", cellDenom, specSN, strifeSN, issues]);
+  });
+  return toCsv(["table", "i", "j", "value", "totalSamples", "specSN", "strifeSN", "issuesCount"], out);
 }
 
 const ProjectQuerySchema = ProjectSelectSchema.extend({
   filters: FiltersSchema.optional(),
+});
+
+const CompactOptsSchema = z.object({
+  compact: z.boolean().optional(),
+  top: z.number().int().positive().optional(),
+  numerator: z.enum(["spec", "strife", "both"]).optional(),
+  sortBy: z.enum(["ppm", "failures", "key"]).optional(),
+  format: FormatSchema,
 });
 
 server.registerTool(
@@ -762,7 +902,7 @@ server.registerTool(
   async (select) => {
     const pid = await resolveProjectId(select);
     const data = await apiGet(`/api/projects/${pid}/sample-sizes`, {});
-    return response(_json(data), { projectId: pid, sampleSizes: data });
+    return response(_json(data), { projectId: pid });
   }
 );
 
@@ -770,16 +910,159 @@ server.registerTool(
   "issueanalyzor_filter_statistics",
   {
     title: "Get Filter Statistics",
-    description: "Get multi-dimension distributions and counts for a project under filters (includes failed_test and failed_location distributions).",
-    inputSchema: ProjectQuerySchema,
+    description: "Get filter statistics. Use only when user explicitly wants distributions/top causes (failed_location etc). For FR-only questions, prefer issueanalyzor_fr_compact. Defaults to compact topK output; set compact=false for full response.",
+    inputSchema: ProjectQuerySchema.merge(CompactOptsSchema),
   },
   async (input) => {
     const { projectId, projectKey, phase, nameContains } = normalizeProjectSelectInput(input);
     const filters = input?.filters;
+    const compact = input?.compact !== false;
+    const top = input?.top;
+    const numerator = input?.numerator;
+    const sortBy = input?.sortBy;
+    const format = compact ? (input?.format || "csv") : "json";
     const pid = projectId ?? (await resolveProjectId({ projectKey, phase, nameContains }));
-    const params = mergeFilters(filters, {});
-    const data = await apiGet(`/api/projects/${pid}/filter-statistics`, params);
-    return response(_json(data), { projectId: pid, filters: params, filterStatistics: data });
+    const params = mergeFilters(filters, compact ? { top, numerator, sortBy } : {});
+    const path = compact ? `/api/projects/${pid}/filter-statistics-compact` : `/api/projects/${pid}/filter-statistics`;
+    const data = await apiGet(path, params);
+    const text = format === "csv" ? distBundleToCsv(data) : _json(data);
+    return response(text, { projectId: pid, format, compact });
+  }
+);
+
+const CompactFrSchema = ProjectSelectSchema.extend({
+  groupBy: z.enum(["none", "config", "wf", "failed_test", "failed_location", "symptom"]).optional(),
+  numerator: z.enum(["spec", "strife", "both"]).optional(),
+  sortBy: z.enum(["ppm", "failures", "key"]).optional(),
+  top: z.number().int().positive().optional(),
+  keys: z.union([z.array(z.string()), z.string()]).optional(),
+  offset: z.number().int().nonnegative().optional(),
+  limit: z.number().int().positive().optional(),
+  filters: FiltersSchema.optional(),
+  format: FormatSchema,
+});
+
+server.registerTool(
+  "issueanalyzor_fr_compact",
+  {
+    title: "Get Compact Failure Rate",
+    description: "Get compact failure counts (distinct SN) and total sample size; supports groupBy and pagination.",
+    inputSchema: CompactFrSchema,
+  },
+  async (input) => {
+    const { projectId, projectKey, phase, nameContains } = normalizeProjectSelectInput(input);
+    const pid = projectId ?? (await resolveProjectId({ projectKey, phase, nameContains }));
+    const groupBy = input?.groupBy;
+    const numerator = input?.numerator;
+    const sortBy = input?.sortBy;
+    const top = input?.top;
+    const offset = input?.offset;
+    const limit = input?.limit ?? (top ? Number(top) : undefined);
+    const keys = input?.keys;
+    const filters = input?.filters;
+    const format = input?.format || "csv";
+    const params = mergeFilters(filters, { groupBy, numerator, sortBy, offset: top ? 0 : offset, limit, keys });
+    const data = await apiGet(`/api/projects/${pid}/fr-compact`, params);
+    const text = format === "csv" ? frCompactToCsv(data) : _json(data);
+    return response(text, { projectId: pid, format });
+  }
+);
+
+const CompactSampleSchema = ProjectSelectSchema.extend({
+  groupBy: z.enum(["failed_test", "wf", "config"]).optional(),
+  top: z.number().int().positive().optional(),
+  keys: z.union([z.array(z.string()), z.string()]).optional(),
+  offset: z.number().int().nonnegative().optional(),
+  limit: z.number().int().positive().optional(),
+  filters: FiltersSchema.optional(),
+  format: FormatSchema,
+});
+
+server.registerTool(
+  "issueanalyzor_sample_size_compact",
+  {
+    title: "Get Compact Sample Size",
+    description: "Get compact sample size totals grouped by failed_test/wf/config with pagination.",
+    inputSchema: CompactSampleSchema,
+  },
+  async (input) => {
+    const { projectId, projectKey, phase, nameContains } = normalizeProjectSelectInput(input);
+    const pid = projectId ?? (await resolveProjectId({ projectKey, phase, nameContains }));
+    const groupBy = input?.groupBy;
+    const top = input?.top;
+    const offset = input?.offset;
+    const limit = input?.limit ?? (top ? Number(top) : undefined);
+    const keys = input?.keys;
+    const filters = input?.filters;
+    const format = input?.format || "csv";
+    const params = mergeFilters(filters, { groupBy, offset: top ? 0 : offset, limit, keys });
+    const data = await apiGet(`/api/projects/${pid}/sample-size-compact`, params);
+    const text = format === "csv" ? sampleSizeCompactToCsv(data) : _json(data);
+    return response(text, { projectId: pid, format });
+  }
+);
+
+const CompactFrMatrixSchema = z.object({
+  snapshots: z.array(ProjectSelectSchema).min(1),
+  numerator: z.enum(["spec", "strife", "both"]).optional(),
+  configs: z.union([z.array(z.string()), z.string()]).optional(),
+  offset: z.number().int().nonnegative().optional(),
+  limit: z.number().int().positive().optional(),
+  filters: FiltersSchema.optional(),
+  format: FormatSchema,
+});
+
+server.registerTool(
+  "issueanalyzor_fr_matrix_compact",
+  {
+    title: "Get Compact FR Matrix (Snapshots × Configs)",
+    description: "Get compact FR inputs for comparing multiple snapshots across many configs (paged).",
+    inputSchema: CompactFrMatrixSchema,
+  },
+  async (input) => {
+    const snapshots = input?.snapshots || [];
+    const numerator = input?.numerator;
+    const offset = input?.offset;
+    const limit = input?.limit;
+    const configs = input?.configs;
+    const filters = input?.filters;
+    const format = input?.format || "csv";
+
+    const resolved = [];
+    for (const s of snapshots) {
+      const pid = await resolveProjectId(s);
+      const norm = normalizeProjectSelectInput(s);
+      const label = norm.projectId ? String(norm.projectId) : `${norm.projectKey || ""}|${norm.phase || ""}`;
+      resolved.push({ projectId: pid, label });
+    }
+
+    let pageKeys = undefined;
+    if (configs) pageKeys = Array.isArray(configs) ? configs : String(configs).split(",").map((v) => v.trim()).filter(Boolean);
+
+    if (!pageKeys) {
+      const first = resolved[0];
+      const firstParams = mergeFilters(filters, { groupBy: "config", numerator, offset, limit });
+      const firstData = await apiGet(`/api/projects/${first.projectId}/fr-compact`, firstParams);
+      pageKeys = firstData?.keys || [];
+    }
+
+    const keyCsv = normalizeCsv(pageKeys);
+    const rows = [];
+    for (let si = 0; si < resolved.length; si++) {
+      const { projectId, label } = resolved[si];
+      const params = mergeFilters(filters, { groupBy: "config", numerator, keys: keyCsv });
+      const data = await apiGet(`/api/projects/${projectId}/fr-compact`, params);
+      const failures = data?.failures || [];
+      const totalSamples = data?.totalSamples || [];
+      for (let ci = 0; ci < pageKeys.length; ci++) {
+        rows.push([si, ci, Number(failures[ci] || 0), Number(totalSamples[ci] || 0)]);
+      }
+      resolved[si] = { projectId, label, offset: data?.offset ?? 0, limit: data?.limit ?? pageKeys.length, totalKeys: data?.totalKeys ?? pageKeys.length };
+    }
+
+    const payload = { snapshots: resolved.map((s) => s.label), configs: pageKeys, rows };
+    const text = format === "csv" ? frMatrixCompactToCsv(payload) : _json(payload);
+    return response(text, { format });
   }
 );
 
@@ -787,16 +1070,23 @@ server.registerTool(
   "issueanalyzor_analysis",
   {
     title: "Get Analysis",
-    description: "Get analysis (overview + symptom/wf/config/test stats) under filters.",
-    inputSchema: ProjectQuerySchema,
+    description: "Get analysis. Use only when user explicitly wants top causes (symptom/wf/config/failed_test). For FR-only questions, prefer issueanalyzor_fr_compact. Defaults to compact topK output; set compact=false for full response.",
+    inputSchema: ProjectQuerySchema.merge(CompactOptsSchema),
   },
   async (input) => {
     const { projectId, projectKey, phase, nameContains } = normalizeProjectSelectInput(input);
     const filters = input?.filters;
+    const compact = input?.compact !== false;
+    const top = input?.top;
+    const numerator = input?.numerator;
+    const sortBy = input?.sortBy;
+    const format = compact ? (input?.format || "csv") : "json";
     const pid = projectId ?? (await resolveProjectId({ projectKey, phase, nameContains }));
-    const params = mergeFilters(filters, {});
-    const data = await apiGet(`/api/projects/${pid}/analysis`, params);
-    return response(_json(data), { projectId: pid, filters: params, analysis: data });
+    const params = mergeFilters(filters, compact ? { top, numerator, sortBy } : {});
+    const path = compact ? `/api/projects/${pid}/analysis-compact` : `/api/projects/${pid}/analysis`;
+    const data = await apiGet(path, params);
+    const text = format === "csv" ? distBundleToCsv(data) : _json(data);
+    return response(text, { projectId: pid, format, compact });
   }
 );
 
@@ -813,7 +1103,7 @@ server.registerTool(
     const pid = projectId ?? (await resolveProjectId({ projectKey, phase, nameContains }));
     const params = mergeFilters(filters, {});
     const data = await apiGet(`/api/projects/${pid}/analysis/test`, params);
-    return response(_json(data), { projectId: pid, filters: params, testAnalysis: data });
+    return response(_json(data), { projectId: pid });
   }
 );
 
@@ -821,21 +1111,32 @@ server.registerTool(
   "issueanalyzor_cross_analysis",
   {
     title: "Get Cross Analysis",
-    description: "Get cross analysis for dimension1 × dimension2 under filters.",
+    description: "Get cross analysis for dimension1 × dimension2 under filters. Defaults to compact CSV output to minimize tokens; set compact=false for full response.",
     inputSchema: ProjectSelectSchema.extend({
       dimension1: z.string(),
       dimension2: z.string(),
+      compact: z.boolean().optional(),
+      top: z.number().int().nonnegative().optional(),
+      sortBy: z.enum(["specSN", "strifeSN", "issues"]).optional(),
+      format: FormatSchema,
       filters: FiltersSchema.optional(),
     }),
   },
   async (input) => {
     const { projectId, projectKey, phase, nameContains } = normalizeProjectSelectInput(input);
     const { dimension1, dimension2 } = input || {};
+    const compact = input?.compact !== false;
+    const top = input?.top;
+    const sortBy = input?.sortBy;
+    const format = compact ? (input?.format || "csv") : "json";
     const filters = input?.filters;
     const pid = projectId ?? (await resolveProjectId({ projectKey, phase, nameContains }));
-    const params = mergeFilters(filters, { dimension1, dimension2 });
-    const data = await apiGet(`/api/projects/${pid}/analysis/cross`, params);
-    return response(_json(data), { projectId: pid, filters: params, crossAnalysis: data });
+    const params = mergeFilters(filters, compact ? { dimension1, dimension2, top, sortBy } : { dimension1, dimension2 });
+    const path = compact ? `/api/projects/${pid}/analysis/cross-compact` : `/api/projects/${pid}/analysis/cross`;
+    const data = await apiGet(path, params);
+    const payload = compact ? data?.crossAnalysis : data?.crossAnalysis;
+    const text = format === "csv" ? crossCompactToCsv(payload) : _json(data);
+    return response(text, { projectId: pid, format, compact });
   }
 );
 
@@ -852,7 +1153,7 @@ server.registerTool(
     const pid = projectId ?? (await resolveProjectId({ projectKey, phase, nameContains }));
     const params = mergeFilters(filters, {});
     const data = await apiGet(`/api/projects/${pid}/failure-rate-matrix`, params);
-    return response(_json(data), { projectId: pid, filters: params, failureRateMatrix: data });
+    return response(_json(data), { projectId: pid });
   }
 );
 
@@ -869,7 +1170,7 @@ server.registerTool(
     const pid = projectId ?? (await resolveProjectId({ projectKey, phase, nameContains }));
     const params = mergeFilters(filters, {});
     const data = await apiGet(`/api/projects/${pid}/issues`, params);
-    return response(_json(data), { projectId: pid, filters: params, issues: data });
+    return response(_json(data), { projectId: pid });
   }
 );
 
@@ -886,7 +1187,8 @@ server.registerTool(
     const pid = projectId ?? (await resolveProjectId({ projectKey, phase, nameContains }));
     const params = mergeFilters(filters, {});
     const data = await apiGet(`/api/projects/${pid}/filter-options`, params);
-    return response(_json(data), { projectId: pid, filters: params, filterOptions: data });
+    const count = data && typeof data === "object" ? Object.values(data).reduce((s, v) => s + (Array.isArray(v) ? v.length : 0), 0) : 0;
+    return response(_json(data), { projectId: pid, count });
   }
 );
 
@@ -909,7 +1211,10 @@ server.registerTool(
         "issueanalyzor_projects_list",
         "issueanalyzor_project_select",
         "issueanalyzor_sample_sizes",
+        "issueanalyzor_sample_size_compact",
         "issueanalyzor_filter_statistics",
+        "issueanalyzor_fr_compact",
+        "issueanalyzor_fr_matrix_compact",
         "issueanalyzor_analysis",
         "issueanalyzor_analysis_test",
         "issueanalyzor_cross_analysis",
@@ -919,7 +1224,7 @@ server.registerTool(
       ],
       filters: Object.keys(FiltersSchema.shape).sort(),
     };
-    return response(_json(capabilities), { capabilities });
+    return response(_json(capabilities), {});
   }
 );
 

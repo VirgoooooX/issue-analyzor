@@ -16,12 +16,11 @@ class AnalysisService {
     const analysisModel = require('../models/analysisModel');
     
     const [issues, sampleSizes] = await Promise.all([
-      analysisModel.getIssues(projectId, { ...filters, limit: 999999 }),
+      analysisModel.getIssuesForAnalysis(projectId, { ...filters }, { limit: 999999 }),
       analysisModel.getSampleSizes(projectId),
     ]);
 
-    // 排除 FA Status 为 "retest pass" 的 issues
-    const allIssues = issues.issues.filter((issue) => this.shouldIncludeInAnalysis(issue));
+    const allIssues = issues.issues;
 
     // Build WF -> Sample Size mapping
     const wfSampleMap = this.buildWFSampleMap(sampleSizes);
@@ -69,6 +68,42 @@ class AnalysisService {
     return String(name).replace(/\s+/g, ' ').trim();
   }
 
+  selectTargetWFs(wfSampleMap, filters = {}) {
+    const { wfs, failed_tests } = filters;
+    let targetWFs = new Set();
+
+    if (failed_tests && failed_tests.length > 0) {
+      const testToWFsMap = {};
+      wfSampleMap.forEach((sample, wf) => {
+        if (sample.tests && Array.isArray(sample.tests)) {
+          sample.tests.forEach((testObj) => {
+            const testName = this.normalizeTestName(testObj.testName);
+            if (!testName) return;
+            if (!testToWFsMap[testName]) testToWFsMap[testName] = new Set();
+            testToWFsMap[testName].add(wf);
+          });
+        }
+      });
+
+      failed_tests.forEach((testName) => {
+        const wfsForTest = testToWFsMap[this.normalizeTestName(testName)];
+        if (!wfsForTest) return;
+        wfsForTest.forEach((wf) => targetWFs.add(wf));
+      });
+
+      if (wfs && wfs.length > 0) {
+        const wfsSet = new Set(wfs);
+        targetWFs = new Set([...targetWFs].filter((wf) => wfsSet.has(wf)));
+      }
+    } else if (wfs && wfs.length > 0) {
+      wfs.forEach((wf) => targetWFs.add(wf));
+    } else {
+      wfSampleMap.forEach((sample, wf) => targetWFs.add(wf));
+    }
+
+    return targetWFs;
+  }
+
   /**
    * Calculate total samples for a specific WF based on filters
    * 根据筛选条件计算特定WF的样本数
@@ -98,47 +133,8 @@ class AnalysisService {
    */
   calculateTotalSamples(wfSampleMap, filters = {}) {
     let total = 0;
-    const { wfs, configs, failed_tests } = filters;
-
-    // 确定需要计算的WF集合
-    let targetWFs = new Set();
-
-    if (failed_tests && failed_tests.length > 0) {
-      // 如果有failed_test筛选，找出包含这些test的所有WF
-      // 需要构建test -> WFs的映射
-      const testToWFsMap = {};
-      wfSampleMap.forEach((sample, wf) => {
-        if (sample.tests && Array.isArray(sample.tests)) {
-          sample.tests.forEach((testObj) => {
-            const testName = this.normalizeTestName(testObj.testName);
-            if (testName) {
-              if (!testToWFsMap[testName]) {
-                testToWFsMap[testName] = new Set();
-              }
-              testToWFsMap[testName].add(wf);
-            }
-          });
-        }
-      });
-
-      failed_tests.forEach((testName) => {
-        const wfsForTest = testToWFsMap[this.normalizeTestName(testName)];
-        if (wfsForTest) {
-          wfsForTest.forEach(wf => targetWFs.add(wf));
-        }
-      });
-      // 如果同时有WF筛选，取交集
-      if (wfs && wfs.length > 0) {
-        const wfsSet = new Set(wfs);
-        targetWFs = new Set([...targetWFs].filter(wf => wfsSet.has(wf)));
-      }
-    } else if (wfs && wfs.length > 0) {
-      // 只有WF筛选
-      wfs.forEach(wf => targetWFs.add(wf));
-    } else {
-      // 没有WF和failed_test筛选，使用所有WF
-      wfSampleMap.forEach((sample, wf) => targetWFs.add(wf));
-    }
+    const { configs } = filters;
+    const targetWFs = this.selectTargetWFs(wfSampleMap, filters);
 
     // 计算样本总数
     if (configs && configs.length > 0) {
@@ -791,6 +787,8 @@ class AnalysisService {
           dimension1Value: dim1Value,
           dimension2Value: dim2Value,
           totalCount: 0,
+          specCount: 0,
+          strifeCount: 0,
           specSNs: new Set(),
           strifeSNs: new Set(),
         });
@@ -801,9 +799,11 @@ class AnalysisService {
       
       // 基于 SN 去重
       const sn = issue.sn || issue.fa_number;
-      if (issue.failure_type === 'Spec.' && sn) {
+      if (issue.failure_type === 'Spec.') {
+        cell.specCount++;
         cell.specSNs.add(sn);
-      } else if (issue.failure_type === 'Strife' && sn) {
+      } else if (issue.failure_type === 'Strife') {
+        cell.strifeCount++;
         cell.strifeSNs.add(sn);
       }
     });
@@ -874,27 +874,16 @@ class AnalysisService {
         });
       }
 
-      // specCount 和 strifeCount 直接计数，不去重
-      const dim1FieldName = dimensionFieldMap[dimension1];
-      const dim2FieldName = dimensionFieldMap[dimension2];
-      const specCount = issues.filter(i => 
-        i[dim1FieldName] === cell.dimension1Value && 
-        i[dim2FieldName] === cell.dimension2Value && 
-        i.failure_type === 'Spec.'
-      ).length;
-      const strifeCount = issues.filter(i => 
-        i[dim1FieldName] === cell.dimension1Value && 
-        i[dim2FieldName] === cell.dimension2Value && 
-        i.failure_type === 'Strife'
-      ).length;
       const percentage = issues.length > 0 ? (cell.totalCount / issues.length) * 100 : 0;
 
       return {
         dimension1Value: cell.dimension1Value,
         dimension2Value: cell.dimension2Value,
         totalCount: cell.totalCount,
-        specCount: specCount,  // 直接计数，不去重
-        strifeCount: strifeCount,  // 直接计数，不去重
+        specCount: cell.specCount,  // 直接计数，不去重
+        strifeCount: cell.strifeCount,  // 直接计数，不去重
+        specSNCount: cell.specSNs.size,
+        strifeSNCount: cell.strifeSNs.size,
         percentage: parseFloat(percentage.toFixed(2)),
         totalSamples,
         totalFailureRate: totalSamples > 0 ? `${cell.specSNs.size}F+${cell.strifeSNs.size}SF/${totalSamples}T` : 'N/A',

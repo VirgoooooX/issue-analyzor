@@ -56,12 +56,16 @@ npm run start
   - `projectId`
   - 或 `projectKey + phase (+ nameContains)` 自动选择最新 `upload_time` 的快照
 - filters 与服务端一致：支持 `date_from/date_to/wfs/configs/failed_tests/failed_locations/symptoms/...`
+- 为减少 token，部分 tool 在 compact 场景默认返回 CSV 文本；需要 JSON 时传 `format="json"`（且如需全量结构可 `compact=false`）。
 
 主要 tools：
 - `issueanalyzor_projects_list`
 - `issueanalyzor_project_select`
 - `issueanalyzor_sample_sizes`
+- `issueanalyzor_sample_size_compact`
 - `issueanalyzor_filter_statistics`
+- `issueanalyzor_fr_compact`
+- `issueanalyzor_fr_matrix_compact`
 - `issueanalyzor_analysis`
 - `issueanalyzor_analysis_test`
 - `issueanalyzor_cross_analysis`
@@ -70,7 +74,7 @@ npm run start
 - `issueanalyzor_filter_options`
 - `issueanalyzor_api_describe`
 
-两步查询（推荐用于“减少 tool 调用次数”）：
+两步查询（可选，用于“需要候选值/跨 phase 报表”）：
 - `issueanalyzor_prepare_context`（Step 1/2）：一次拿齐 phases 的快照、filter vocab、sample size 汇总，返回 contextId
 - `issueanalyzor_run_report`（Step 2/2）：传入 contextId + 结构化 filters，返回可直接写报告的表格数据
 

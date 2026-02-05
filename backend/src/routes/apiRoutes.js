@@ -37,11 +37,16 @@ router.delete('/:id', projectController.deleteProject);
 router.get('/:id/issues', analysisController.getIssues);
 router.get('/:id/filter-options', analysisController.getFilterOptions);
 router.get('/:id/analysis', analysisController.getAnalysis);
+router.get('/:id/analysis-compact', analysisController.getAnalysisCompact);
 router.get('/:id/analysis/test', analysisController.getTestAnalysis);
 router.get('/:id/analysis/cross', analysisController.getCrossAnalysis);
+router.get('/:id/analysis/cross-compact', analysisController.getCrossAnalysisCompact);
 router.get('/:id/filter-statistics', analysisController.getFilterStatistics);
+router.get('/:id/filter-statistics-compact', analysisController.getFilterStatisticsCompact);
 router.get('/:id/sample-sizes', analysisController.getSampleSizes);
 router.get('/:id/failure-rate-matrix', analysisController.getFailureRateMatrix);
+router.get('/:id/fr-compact', analysisController.getCompactFailureRate);
+router.get('/:id/sample-size-compact', analysisController.getCompactSampleSize);
 
 // Export routes
 router.get('/:id/export/excel', analysisController.exportExcel);

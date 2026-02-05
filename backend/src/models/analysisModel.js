@@ -1,5 +1,6 @@
 const { getDatabase } = require('./database');
 const analysisService = require('../services/analysisService');
+const { buildIssuesWhere, normalizeCsvArray } = require('./issueWhere');
 
 /**
  * Analysis Model - Database operations for data querying and analysis
@@ -11,165 +12,15 @@ class AnalysisModel {
    */
   async getIssues(projectId, filters = {}) {
     const db = getDatabase();
-    const {
-      // Date range
-      date_from,
-      date_to,
-      // Multi-select filters
-      priorities,
-      sample_statuses,
-      departments,
-      wfs,
-      configs,
-      failed_tests,
-      test_ids,
-      failure_types,
-      function_cosmetic,
-      failed_locations,
-      symptoms,
-      fa_statuses,
-      // Text search filters
-      unit_number,
-      sn,
-      fa_search,
-      // Pagination
-      page = 1,
-      limit = 100,
-      sort_by = 'open_date',
-      sort_order = 'DESC',
-    } = filters;
+    const { page = 1, limit = 100, sort_by = 'open_date', sort_order = 'DESC', ...rest } = filters;
+    const { date_from, date_to } = rest;
 
-    let query = `SELECT * FROM issues WHERE project_id = ?`;
-    const params = [projectId];
+    const { where, params } = buildIssuesWhere(projectId, rest, { excludeRetestPass: false });
+    let query = `SELECT * FROM issues WHERE ${where}`;
     
     // Debug logging for date filters
     if (date_from || date_to) {
       console.log(`🔍 Date filter detected - date_from: ${date_from}, date_to: ${date_to}`);
-    }
-
-    // Helper function to parse comma-separated values
-    const parseArray = (value) => {
-      if (!value) return null;
-      if (Array.isArray(value)) return value;
-      return value.split(',').map(v => v.trim()).filter(v => v);
-    };
-
-    // Date range filter
-    if (date_from) {
-      // Use string comparison for DATE fields (YYYY-MM-DD format)
-      // This works because dates are stored as text in ISO format
-      query += ` AND CAST(open_date AS TEXT) >= ?`;
-      params.push(date_from);
-      console.log(`  ✅ Added date_from filter: ${date_from}`);
-    }
-    if (date_to) {
-      // Use string comparison for DATE fields (YYYY-MM-DD format)
-      // This works because dates are stored as text in ISO format
-      query += ` AND CAST(open_date AS TEXT) <= ?`;
-      params.push(date_to);
-      console.log(`  ✅ Added date_to filter: ${date_to}`);
-    }
-
-    // Priority filter
-    const priorityList = parseArray(priorities);
-    if (priorityList && priorityList.length > 0) {
-      query += ` AND priority IN (${priorityList.map(() => '?').join(',')})`;
-      params.push(...priorityList);
-    }
-
-    // Sample Status filter (from raw_data JSON)
-    const sampleStatusList = parseArray(sample_statuses);
-    if (sampleStatusList && sampleStatusList.length > 0) {
-      query += ` AND sample_status IN (${sampleStatusList.map(() => '?').join(',')})`;
-      params.push(...sampleStatusList);
-    }
-
-    // Department filter
-    const departmentList = parseArray(departments);
-    if (departmentList && departmentList.length > 0) {
-      query += ` AND department IN (${departmentList.map(() => '?').join(',')})`;
-      params.push(...departmentList);
-    }
-
-    // Unit# filter (fuzzy search in raw_data)
-    if (unit_number) {
-      query += ` AND raw_data LIKE ?`;
-      params.push(`%"Unit#":"%${unit_number}%"%`);
-    }
-
-    // SN filter (fuzzy search in raw_data)
-    if (sn) {
-      query += ` AND raw_data LIKE ?`;
-      params.push(`%"SN":"%${sn}%"%`);
-    }
-
-    // WF filter
-    const wfList = parseArray(wfs);
-    if (wfList && wfList.length > 0) {
-      query += ` AND wf IN (${wfList.map(() => '?').join(',')})`;
-      params.push(...wfList);
-    }
-
-    // Config filter
-    const configList = parseArray(configs);
-    if (configList && configList.length > 0) {
-      query += ` AND config IN (${configList.map(() => '?').join(',')})`;
-      params.push(...configList);
-    }
-
-    // Failed Test filter
-    const failedTestList = parseArray(failed_tests);
-    if (failedTestList && failedTestList.length > 0) {
-      query += ` AND failed_test IN (${failedTestList.map(() => '?').join(',')})`;
-      params.push(...failedTestList);
-    }
-
-    // Test ID filter
-    const testIdList = parseArray(test_ids);
-    if (testIdList && testIdList.length > 0) {
-      query += ` AND test_id IN (${testIdList.map(() => '?').join(',')})`;
-      params.push(...testIdList);
-    }
-
-    // Failure Type filter
-    const failureTypeList = parseArray(failure_types);
-    if (failureTypeList && failureTypeList.length > 0) {
-      query += ` AND failure_type IN (${failureTypeList.map(() => '?').join(',')})`;
-      params.push(...failureTypeList);
-    }
-
-    // Function or Cosmetic filter
-    const functionCosmeticList = parseArray(function_cosmetic);
-    if (functionCosmeticList && functionCosmeticList.length > 0) {
-      query += ` AND function_or_cosmetic IN (${functionCosmeticList.map(() => '?').join(',')})`;
-      params.push(...functionCosmeticList);
-    }
-
-    // Failed Location filter
-    const failedLocationList = parseArray(failed_locations);
-    if (failedLocationList && failedLocationList.length > 0) {
-      query += ` AND failed_location IN (${failedLocationList.map(() => '?').join(',')})`;
-      params.push(...failedLocationList);
-    }
-
-    // Symptom filter
-    const symptomList = parseArray(symptoms);
-    if (symptomList && symptomList.length > 0) {
-      query += ` AND symptom IN (${symptomList.map(() => '?').join(',')})`;
-      params.push(...symptomList);
-    }
-
-    // FA Status filter
-    const faStatusList = parseArray(fa_statuses);
-    if (faStatusList && faStatusList.length > 0) {
-      query += ` AND fa_status IN (${faStatusList.map(() => '?').join(',')})`;
-      params.push(...faStatusList);
-    }
-
-    // FA# search filter
-    if (fa_search) {
-      query += ` AND fa_number LIKE ?`;
-      params.push(`%${fa_search}%`);
     }
 
     // Get total count
@@ -202,6 +53,16 @@ class AnalysisModel {
       page: parseInt(page),
       limit: parseInt(limit),
     };
+  }
+
+  async getIssuesForAnalysis(projectId, filters = {}, options = {}) {
+    const db = getDatabase();
+    const { limit = 999999 } = options || {};
+    const { where, params } = buildIssuesWhere(projectId, filters, { excludeRetestPass: true });
+    const query = `SELECT * FROM issues WHERE ${where} LIMIT ?`;
+    const stmt = db.prepare(query);
+    const issues = stmt.all(...params, parseInt(limit));
+    return { issues };
   }
 
   /**
@@ -367,11 +228,11 @@ class AnalysisModel {
   async getTestAnalysis(projectId, filters = {}) {
     // Get issues and sample sizes
     const [issuesResult, sampleSizes] = await Promise.all([
-      this.getIssues(projectId, { ...filters, page: 1, limit: 100000 }),
+      this.getIssuesForAnalysis(projectId, { ...filters }, { limit: 100000 }),
       this.getSampleSizes(projectId),
     ]);
 
-    const issues = issuesResult.issues.filter((issue) => analysisService.shouldIncludeInAnalysis(issue));
+    const issues = issuesResult.issues;
 
     // Use analysisService to calculate test stats
     const wfSampleMap = analysisService.buildWFSampleMap(sampleSizes);
@@ -436,7 +297,7 @@ class AnalysisModel {
     }
 
     // Get filtered issues
-    const issuesResult = await this.getIssues(projectId, { ...filters, limit: 999999 });
+    const issuesResult = await this.getIssuesForAnalysis(projectId, { ...filters }, { limit: 999999 });
     const issues = issuesResult.issues;
 
     // Get sample sizes
@@ -476,12 +337,106 @@ class AnalysisModel {
     };
   }
 
+  async getCrossAnalysisCompact(projectId, dimension1, dimension2, filters = {}, options = {}) {
+    const topRaw = Number(options.top);
+    const top = Number.isFinite(topRaw) ? Math.min(Math.max(0, topRaw), 5000) : 300;
+    const sortBy = String(options.sortBy || 'specSN');
+
+    const issuesResult = await this.getIssuesForAnalysis(projectId, { ...filters }, { limit: 999999 });
+    const issues = issuesResult.issues;
+
+    const sampleSizes = await this.getSampleSizes(projectId);
+    const wfSampleMap = analysisService.buildWFSampleMap(sampleSizes);
+    const matrix = analysisService.calculateCrossStats(issues, wfSampleMap, dimension1, dimension2, filters);
+
+    const dimension1ValuesSet = new Set();
+    const dimension2ValuesSet = new Set();
+    matrix.forEach((cell) => {
+      dimension1ValuesSet.add(cell.dimension1Value);
+      dimension2ValuesSet.add(cell.dimension2Value);
+    });
+
+    const sortDimensionValues = (values, dimensionName) => {
+      const valuesArray = Array.from(values);
+      if (dimensionName === 'wf') {
+        return valuesArray.sort((a, b) => {
+          const numA = parseInt(a) || 0;
+          const numB = parseInt(b) || 0;
+          return numA - numB;
+        });
+      }
+      return valuesArray.sort();
+    };
+
+    const dimension1Values = sortDimensionValues(dimension1ValuesSet, dimension1);
+    const dimension2Values = sortDimensionValues(dimension2ValuesSet, dimension2);
+
+    const d1Index = new Map(dimension1Values.map((v, i) => [v, i]));
+    const d2Index = new Map(dimension2Values.map((v, i) => [v, i]));
+
+    const denomByDim2 = new Array(dimension2Values.length).fill(0);
+    const denomSeen = new Map();
+    let denomMismatch = false;
+    matrix.forEach((cell) => {
+      const d2i = d2Index.get(cell.dimension2Value);
+      if (d2i === undefined) return;
+      const denom = Number(cell.totalSamples || 0);
+      const prev = denomSeen.get(cell.dimension2Value);
+      if (prev !== undefined && prev !== denom) denomMismatch = true;
+      denomSeen.set(cell.dimension2Value, denom);
+      denomByDim2[d2i] = denom;
+    });
+
+    const sortedCells = matrix
+      .slice()
+      .sort((a, b) => {
+        const av =
+          sortBy === 'issues'
+            ? a.totalCount
+            : sortBy === 'strifeSN'
+              ? (a.strifeSNCount || 0)
+              : (a.specSNCount || 0);
+        const bv =
+          sortBy === 'issues'
+            ? b.totalCount
+            : sortBy === 'strifeSN'
+              ? (b.strifeSNCount || 0)
+              : (b.specSNCount || 0);
+        if (bv !== av) return bv - av;
+        return b.totalCount - a.totalCount;
+      });
+
+    const slicedCells = top > 0 ? sortedCells.slice(0, top) : sortedCells;
+
+    const cells = slicedCells
+      .map((c) => {
+        const i = d1Index.get(c.dimension1Value);
+        const j = d2Index.get(c.dimension2Value);
+        if (i === undefined || j === undefined) return null;
+        if (denomMismatch) return [i, j, Number(c.specSNCount || 0), Number(c.strifeSNCount || 0), Number(c.totalCount || 0), Number(c.totalSamples || 0)];
+        return [i, j, Number(c.specSNCount || 0), Number(c.strifeSNCount || 0), Number(c.totalCount || 0)];
+      })
+      .filter(Boolean);
+
+    return {
+      dimension1,
+      dimension2,
+      sortBy,
+      top,
+      totalIssues: Number(issues.length || 0),
+      dimension1Values,
+      dimension2Values,
+      denomByDim2,
+      denomPerCell: denomMismatch,
+      cells,
+    };
+  }
+
   /**
    * Get filter statistics for筛选结果页面
    */
   async getFilterStatistics(projectId, filters = {}, includeTrend = false) {
-    // Get filtered issues
-    const issuesResult = await this.getIssues(projectId, { ...filters, limit: 999999 });
+    const issuesResult = await this.getIssuesForAnalysis(projectId, { ...filters }, { limit: 999999 });
     const issues = issuesResult.issues;
 
     // Get sample sizes
@@ -501,7 +456,7 @@ class AnalysisModel {
     const db = getDatabase();
 
     // 获取所有 issues（支持筛选）
-    const issuesResult = await this.getIssues(projectId, { ...filters, page: 1, limit: 100000 });
+    const issuesResult = await this.getIssuesForAnalysis(projectId, { ...filters }, { limit: 100000 });
     const issues = issuesResult.issues;
 
     // 获取 sample sizes（包含 tests 信息）
@@ -642,6 +597,410 @@ class AnalysisModel {
       configs,
       matrix,
       testsByWf, // 保留 WF 和 Test 的映射关系
+    };
+  }
+
+  async getCompactFailureRate(projectId, options = {}) {
+    const db = getDatabase();
+    const groupBy = String(options.groupBy || 'none');
+    const numerator = String(options.numerator || 'spec');
+    const sortBy = String(options.sortBy || 'ppm');
+    const filters = options.filters || {};
+    const offset = Math.max(0, Number(options.offset || 0) || 0);
+    const limitRaw = Number(options.limit || 200) || 200;
+    const limit = Math.min(Math.max(1, limitRaw), 1000);
+    const keys = normalizeCsvArray(options.keys);
+
+    const sampleSizes = await this.getSampleSizes(projectId);
+    const wfSampleMap = analysisService.buildWFSampleMap(sampleSizes);
+
+    const normalizedFilters = { ...filters };
+    if (normalizedFilters.wfs) normalizedFilters.wfs = normalizeCsvArray(normalizedFilters.wfs);
+    if (normalizedFilters.configs) normalizedFilters.configs = normalizeCsvArray(normalizedFilters.configs);
+    if (normalizedFilters.failed_tests) normalizedFilters.failed_tests = normalizeCsvArray(normalizedFilters.failed_tests);
+
+    const { where, params } = buildIssuesWhere(projectId, filters, { excludeRetestPass: true });
+    const numeratorWhere =
+      numerator === 'spec'
+        ? ` AND failure_type = 'Spec.'`
+        : numerator === 'strife'
+          ? ` AND failure_type = 'Strife'`
+          : '';
+
+    if (groupBy === 'none') {
+      const row = db
+        .prepare(`SELECT COUNT(DISTINCT COALESCE(sn, fa_number)) AS failures FROM issues WHERE ${where}${numeratorWhere}`)
+        .get(...params);
+      const totalSamples = analysisService.calculateTotalSamples(wfSampleMap, normalizedFilters);
+      return {
+        groupBy,
+        numerator,
+        failures: Number(row?.failures || 0),
+        totalSamples: Number(totalSamples || 0),
+      };
+    }
+
+    const groupCol =
+      groupBy === 'config'
+        ? 'config'
+        : groupBy === 'failed_location'
+          ? 'failed_location'
+          : groupBy === 'symptom'
+            ? 'symptom'
+            : groupBy === 'wf'
+              ? 'wf'
+              : groupBy === 'failed_test'
+                ? 'failed_test'
+          : null;
+
+    if (!groupCol) {
+      throw new Error(`Unsupported groupBy: ${groupBy}`);
+    }
+
+    const grouped = db
+      .prepare(
+        `SELECT ${groupCol} AS k, COUNT(DISTINCT COALESCE(sn, fa_number)) AS failures
+         FROM issues
+         WHERE ${where}${numeratorWhere}
+           AND ${groupCol} IS NOT NULL AND trim(${groupCol}) <> ''
+         GROUP BY ${groupCol}`
+      )
+      .all(...params);
+
+    const failuresMap = new Map();
+    grouped.forEach((r) => {
+      const k = String(r.k || '').trim();
+      if (!k) return;
+      failuresMap.set(k, Number(r.failures || 0));
+    });
+
+    const makeSortedKeys = (allKeys, denomGetter, denomScalar) => {
+      if (keys) return allKeys;
+      if (sortBy === 'key') return allKeys.slice().sort();
+      if (sortBy === 'failures') {
+        return allKeys
+          .slice()
+          .sort((a, b) => (failuresMap.get(b) || 0) - (failuresMap.get(a) || 0) || String(a).localeCompare(String(b)));
+      }
+      if (denomScalar !== undefined) {
+        return allKeys
+          .slice()
+          .sort((a, b) => (failuresMap.get(b) || 0) - (failuresMap.get(a) || 0) || String(a).localeCompare(String(b)));
+      }
+      return allKeys
+        .slice()
+        .sort((a, b) => {
+          const fa = failuresMap.get(a) || 0;
+          const fb = failuresMap.get(b) || 0;
+          const da = denomGetter(a) || 0;
+          const dbb = denomGetter(b) || 0;
+          const ra = da > 0 ? fa / da : -1;
+          const rb = dbb > 0 ? fb / dbb : -1;
+          if (rb !== ra) return rb - ra;
+          if (fb !== fa) return fb - fa;
+          return String(a).localeCompare(String(b));
+        });
+    };
+
+    if (groupBy === 'failed_location' || groupBy === 'symptom') {
+      const totalSamples = analysisService.calculateTotalSamples(wfSampleMap, normalizedFilters);
+      const allKeys = keys ? keys : Array.from(failuresMap.keys());
+      const sortedKeys = makeSortedKeys(allKeys, () => 0, Number(totalSamples || 0));
+      const pagedKeys = keys ? sortedKeys : sortedKeys.slice(offset, offset + limit);
+      const failures = pagedKeys.map((k) => failuresMap.get(k) || 0);
+      return {
+        groupBy,
+        numerator,
+        sortBy,
+        offset: keys ? 0 : offset,
+        limit: keys ? sortedKeys.length : limit,
+        totalKeys: sortedKeys.length,
+        keys: pagedKeys,
+        failures,
+        totalSamples: Number(totalSamples || 0),
+      };
+    }
+
+    if (groupBy === 'wf') {
+      const denomMap = new Map();
+      wfSampleMap.forEach((sample, wf) => {
+        denomMap.set(String(wf), Number(analysisService.calculateWFSampleSize(String(wf), wfSampleMap, normalizedFilters) || 0));
+      });
+      const denomKeys = Array.from(denomMap.keys());
+      const allKeysSet = new Set([...denomKeys, ...Array.from(failuresMap.keys())]);
+      const allKeys = keys ? keys : Array.from(allKeysSet);
+      const sortedKeys = makeSortedKeys(allKeys, (k) => denomMap.get(k) || 0);
+      const pagedKeys = keys ? sortedKeys : sortedKeys.slice(offset, offset + limit);
+      const failures = pagedKeys.map((k) => failuresMap.get(k) || 0);
+      const totalSamples = pagedKeys.map((k) => denomMap.get(k) || 0);
+
+      return {
+        groupBy,
+        numerator,
+        sortBy,
+        offset: keys ? 0 : offset,
+        limit: keys ? sortedKeys.length : limit,
+        totalKeys: sortedKeys.length,
+        keys: pagedKeys,
+        failures,
+        totalSamples,
+      };
+    }
+
+    if (groupBy === 'failed_test') {
+      const testToWFsMap = new Map();
+      wfSampleMap.forEach((sample, wf) => {
+        if (sample.tests && Array.isArray(sample.tests)) {
+          sample.tests.forEach((testObj) => {
+            const testName = analysisService.normalizeTestName(testObj.testName);
+            if (!testName) return;
+            if (!testToWFsMap.has(testName)) testToWFsMap.set(testName, new Set());
+            testToWFsMap.get(testName).add(wf);
+          });
+        }
+      });
+
+      const denomMap = new Map();
+      for (const testName of failuresMap.keys()) {
+        const normalizedTest = analysisService.normalizeTestName(testName);
+        const wfsForTest = testToWFsMap.get(normalizedTest);
+
+        if (wfsForTest && wfsForTest.size > 0) {
+          const testSpecificFilters = { ...normalizedFilters, failed_tests: [testName] };
+          denomMap.set(testName, Number(analysisService.calculateTotalSamples(wfSampleMap, testSpecificFilters) || 0));
+          continue;
+        }
+
+        const stmt = db.prepare(
+          `SELECT DISTINCT wf AS wf FROM issues WHERE ${where} AND failed_test = ? AND wf IS NOT NULL AND trim(wf) <> ''`
+        );
+        const rows = stmt.all(...params, testName);
+        const displayWFs = rows.map((r) => String(r.wf || '').trim()).filter((v) => v);
+
+        let total = 0;
+        if (displayWFs.length > 0) {
+          const fallbackFilters = { ...normalizedFilters };
+          delete fallbackFilters.failed_tests;
+          fallbackFilters.wfs = displayWFs;
+          total = analysisService.calculateTotalSamples(wfSampleMap, fallbackFilters);
+        }
+        denomMap.set(testName, Number(total || 0));
+      }
+
+      const denomKeys = Array.from(denomMap.keys());
+      const allKeysSet = new Set([...denomKeys, ...Array.from(failuresMap.keys())]);
+      const allKeys = keys ? keys : Array.from(allKeysSet);
+      const sortedKeys = makeSortedKeys(allKeys, (k) => denomMap.get(k) || 0);
+      const pagedKeys = keys ? sortedKeys : sortedKeys.slice(offset, offset + limit);
+      const failures = pagedKeys.map((k) => failuresMap.get(k) || 0);
+      const totalSamples = pagedKeys.map((k) => denomMap.get(k) || 0);
+
+      return {
+        groupBy,
+        numerator,
+        sortBy,
+        offset: keys ? 0 : offset,
+        limit: keys ? sortedKeys.length : limit,
+        totalKeys: sortedKeys.length,
+        keys: pagedKeys,
+        failures,
+        totalSamples,
+      };
+    }
+
+    const targetWFs = analysisService.selectTargetWFs(wfSampleMap, normalizedFilters);
+    const denomMap = new Map();
+    targetWFs.forEach((wf) => {
+      const sample = wfSampleMap.get(wf);
+      if (!sample || !sample.configSamples) return;
+      Object.entries(sample.configSamples).forEach(([cfg, n]) => {
+        const k = analysisService.normalizeConfigName(cfg);
+        if (!k) return;
+        denomMap.set(k, (denomMap.get(k) || 0) + (Number(n) || 0));
+      });
+    });
+
+    const denomKeys = Array.from(denomMap.keys());
+    const allKeysSet = new Set([...denomKeys, ...Array.from(failuresMap.keys())]);
+    const allKeys = keys ? keys : Array.from(allKeysSet);
+    const sortedKeys = makeSortedKeys(allKeys, (k) => denomMap.get(k) || 0);
+    const pagedKeys = keys ? sortedKeys : sortedKeys.slice(offset, offset + limit);
+
+    const failures = pagedKeys.map((k) => failuresMap.get(k) || 0);
+    const totalSamples = pagedKeys.map((k) => denomMap.get(k) || 0);
+
+    return {
+      groupBy,
+      numerator,
+      sortBy,
+      offset: keys ? 0 : offset,
+      limit: keys ? sortedKeys.length : limit,
+      totalKeys: sortedKeys.length,
+      keys: pagedKeys,
+      failures,
+      totalSamples,
+    };
+  }
+
+  async getAnalysisCompact(projectId, filters = {}, options = {}) {
+    const top = Math.min(Math.max(1, Number(options.top || 20) || 20), 500);
+    const numerator = String(options.numerator || 'spec');
+    const sortBy = String(options.sortBy || 'ppm');
+
+    const overview = await this.getCompactFailureRate(projectId, { groupBy: 'none', numerator, sortBy, filters });
+
+    const symptoms = await this.getCompactFailureRate(projectId, { groupBy: 'symptom', numerator, sortBy, filters, offset: 0, limit: top });
+    const wfs = await this.getCompactFailureRate(projectId, { groupBy: 'wf', numerator, sortBy, filters, offset: 0, limit: top });
+    const configs = await this.getCompactFailureRate(projectId, { groupBy: 'config', numerator, sortBy, filters, offset: 0, limit: top });
+    const failedTests = await this.getCompactFailureRate(projectId, { groupBy: 'failed_test', numerator, sortBy, filters, offset: 0, limit: top });
+
+    return {
+      overview,
+      top,
+      numerator,
+      sortBy,
+      distributions: {
+        symptoms: { keys: symptoms.keys || [], failures: symptoms.failures || [], totalSamples: symptoms.totalSamples },
+        wfs: { keys: wfs.keys || [], failures: wfs.failures || [], totalSamples: wfs.totalSamples || [] },
+        configs: { keys: configs.keys || [], failures: configs.failures || [], totalSamples: configs.totalSamples || [] },
+        failedTests: { keys: failedTests.keys || [], failures: failedTests.failures || [], totalSamples: failedTests.totalSamples || [] },
+      },
+    };
+  }
+
+  async getFilterStatisticsCompact(projectId, filters = {}, options = {}) {
+    const top = Math.min(Math.max(1, Number(options.top || 20) || 20), 500);
+    const numerator = String(options.numerator || 'spec');
+    const sortBy = String(options.sortBy || 'ppm');
+
+    const overview = await this.getCompactFailureRate(projectId, { groupBy: 'none', numerator, sortBy, filters });
+
+    const symptoms = await this.getCompactFailureRate(projectId, { groupBy: 'symptom', numerator, sortBy, filters, offset: 0, limit: top });
+    const wfs = await this.getCompactFailureRate(projectId, { groupBy: 'wf', numerator, sortBy, filters, offset: 0, limit: top });
+    const configs = await this.getCompactFailureRate(projectId, { groupBy: 'config', numerator, sortBy, filters, offset: 0, limit: top });
+    const failedTests = await this.getCompactFailureRate(projectId, { groupBy: 'failed_test', numerator, sortBy, filters, offset: 0, limit: top });
+    const failedLocations = await this.getCompactFailureRate(projectId, { groupBy: 'failed_location', numerator, sortBy, filters, offset: 0, limit: top });
+
+    return {
+      overview,
+      top,
+      numerator,
+      sortBy,
+      distributions: {
+        symptoms: { keys: symptoms.keys || [], failures: symptoms.failures || [], totalSamples: symptoms.totalSamples },
+        wfs: { keys: wfs.keys || [], failures: wfs.failures || [], totalSamples: wfs.totalSamples || [] },
+        configs: { keys: configs.keys || [], failures: configs.failures || [], totalSamples: configs.totalSamples || [] },
+        failedTests: { keys: failedTests.keys || [], failures: failedTests.failures || [], totalSamples: failedTests.totalSamples || [] },
+        failedLocations: { keys: failedLocations.keys || [], failures: failedLocations.failures || [], totalSamples: failedLocations.totalSamples },
+      },
+    };
+  }
+
+  async getCompactSampleSize(projectId, options = {}) {
+    const groupBy = String(options.groupBy || 'failed_test');
+    const filters = options.filters || {};
+    const offset = Math.max(0, Number(options.offset || 0) || 0);
+    const limitRaw = Number(options.limit || 200) || 200;
+    const limit = Math.min(Math.max(1, limitRaw), 1000);
+    const keys = normalizeCsvArray(options.keys);
+
+    const sampleSizes = await this.getSampleSizes(projectId);
+    const wfSampleMap = analysisService.buildWFSampleMap(sampleSizes);
+
+    const normalizedFilters = { ...filters };
+    if (normalizedFilters.wfs) normalizedFilters.wfs = normalizeCsvArray(normalizedFilters.wfs);
+    if (normalizedFilters.configs) normalizedFilters.configs = normalizeCsvArray(normalizedFilters.configs);
+
+    if (groupBy === 'wf') {
+      const wfs = keys ? keys : Array.from(wfSampleMap.keys()).sort((a, b) => (Number(a) || 0) - (Number(b) || 0));
+      const paged = keys ? wfs : wfs.slice(offset, offset + limit);
+      const totals = paged.map((wf) => analysisService.calculateWFSampleSize(wf, wfSampleMap, normalizedFilters));
+      return {
+        groupBy,
+        offset: keys ? 0 : offset,
+        limit: keys ? wfs.length : limit,
+        totalKeys: wfs.length,
+        keys: paged,
+        totalSamples: totals.map((n) => Number(n || 0)),
+      };
+    }
+
+    if (groupBy === 'config') {
+      const targetWFs = analysisService.selectTargetWFs(wfSampleMap, normalizedFilters);
+      const denomMap = new Map();
+      targetWFs.forEach((wf) => {
+        const sample = wfSampleMap.get(wf);
+        if (!sample || !sample.configSamples) return;
+        Object.entries(sample.configSamples).forEach(([cfg, n]) => {
+          const k = analysisService.normalizeConfigName(cfg);
+          if (!k) return;
+          denomMap.set(k, (denomMap.get(k) || 0) + (Number(n) || 0));
+        });
+      });
+      const allKeys = keys ? keys : Array.from(denomMap.keys()).sort();
+      const paged = keys ? allKeys : allKeys.slice(offset, offset + limit);
+      const totals = paged.map((k) => denomMap.get(k) || 0);
+      return {
+        groupBy,
+        offset: keys ? 0 : offset,
+        limit: keys ? allKeys.length : limit,
+        totalKeys: allKeys.length,
+        keys: paged,
+        totalSamples: totals.map((n) => Number(n || 0)),
+      };
+    }
+
+    if (groupBy !== 'failed_test') {
+      throw new Error(`Unsupported groupBy: ${groupBy}`);
+    }
+
+    const testToWFsMap = new Map();
+    wfSampleMap.forEach((sample, wf) => {
+      if (sample.tests && Array.isArray(sample.tests)) {
+        sample.tests.forEach((testObj) => {
+          const testName = analysisService.normalizeTestName(testObj.testName);
+          if (!testName) return;
+          if (!testToWFsMap.has(testName)) testToWFsMap.set(testName, new Set());
+          testToWFsMap.get(testName).add(wf);
+        });
+      }
+    });
+
+    const allTests = keys ? keys : Array.from(testToWFsMap.keys()).sort();
+    const pagedTests = keys ? allTests : allTests.slice(offset, offset + limit);
+    const totals = pagedTests.map((testName) => {
+      const wfsForTest = testToWFsMap.get(analysisService.normalizeTestName(testName)) || new Set();
+      let targetWFs = new Set(wfsForTest);
+      if (normalizedFilters.wfs && normalizedFilters.wfs.length > 0) {
+        const wfsSet = new Set(normalizedFilters.wfs);
+        targetWFs = new Set([...targetWFs].filter((wf) => wfsSet.has(wf)));
+      }
+      let total = 0;
+      if (normalizedFilters.configs && normalizedFilters.configs.length > 0) {
+        targetWFs.forEach((wf) => {
+          const sample = wfSampleMap.get(wf);
+          if (!sample || !sample.configSamples) return;
+          normalizedFilters.configs.forEach((cfg) => {
+            total += sample.configSamples[cfg] || 0;
+          });
+        });
+      } else {
+        targetWFs.forEach((wf) => {
+          const sample = wfSampleMap.get(wf);
+          if (!sample) return;
+          total += sample.totalSamples || 0;
+        });
+      }
+      return total;
+    });
+
+    return {
+      groupBy,
+      offset: keys ? 0 : offset,
+      limit: keys ? allTests.length : limit,
+      totalKeys: allTests.length,
+      keys: pagedTests,
+      totalSamples: totals.map((n) => Number(n || 0)),
     };
   }
 }

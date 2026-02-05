@@ -73,6 +73,34 @@ async function getAnalysis(req, res, next) {
   }
 }
 
+async function getAnalysisCompact(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { top, numerator, sortBy, ...filters } = req.query;
+
+    const cacheKey = cacheService.generateCacheKey(
+      `analysis_compact_${String(top || 20)}_${String(numerator || 'spec')}_${String(sortBy || 'ppm')}`,
+      id,
+      filters
+    );
+
+    const data = await cacheService.getOrFetch(
+      cacheKey,
+      async () => {
+        return await analysisModel.getAnalysisCompact(id, filters, { top, numerator, sortBy });
+      },
+      3600
+    );
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 /**
  * Get test analysis for a project
  */
@@ -148,6 +176,43 @@ async function getCrossAnalysis(req, res, next) {
   }
 }
 
+async function getCrossAnalysisCompact(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { dimension1, dimension2, top, sortBy, ...filters } = req.query;
+
+    if (!dimension1 || !dimension2) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameters: dimension1 and dimension2',
+      });
+    }
+
+    const cacheKey = cacheService.generateCacheKey(
+      `cross_compact_${dimension1}_${dimension2}_${String(top || 300)}_${String(sortBy || 'specSN')}`,
+      id,
+      filters
+    );
+
+    const data = await cacheService.getOrFetch(
+      cacheKey,
+      async () => {
+        return await analysisModel.getCrossAnalysisCompact(id, dimension1, dimension2, filters, { top, sortBy });
+      },
+      3600
+    );
+
+    res.json({
+      success: true,
+      data: {
+        crossAnalysis: data,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 /**
  * Get filter statistics for筛选结果页面
  */
@@ -186,6 +251,34 @@ async function getFilterStatistics(req, res, next) {
     res.json({
       success: true,
       data: statistics,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getFilterStatisticsCompact(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { top, numerator, sortBy, ...filters } = req.query;
+
+    const cacheKey = cacheService.generateCacheKey(
+      `filter_stats_compact_${String(top || 20)}_${String(numerator || 'spec')}_${String(sortBy || 'ppm')}`,
+      id,
+      filters
+    );
+
+    const data = await cacheService.getOrFetch(
+      cacheKey,
+      async () => {
+        return await analysisModel.getFilterStatisticsCompact(id, filters, { top, numerator, sortBy });
+      },
+      3600
+    );
+
+    res.json({
+      success: true,
+      data,
     });
   } catch (error) {
     next(error);
@@ -233,6 +326,75 @@ async function getFailureRateMatrix(req, res, next) {
     res.json({
       success: true,
       data: matrixData,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getCompactFailureRate(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { groupBy, numerator, offset, limit, keys, ...filters } = req.query;
+
+    const cacheKey = cacheService.generateCacheKey(
+      `fr_compact_${String(groupBy || 'none')}_${String(numerator || 'spec')}_${String(offset || 0)}_${String(limit || 200)}`,
+      id,
+      { ...filters, keys: keys || undefined }
+    );
+
+    const data = await cacheService.getOrFetch(
+      cacheKey,
+      async () => {
+        return await analysisModel.getCompactFailureRate(id, {
+          groupBy,
+          numerator,
+          offset,
+          limit,
+          keys,
+          filters,
+        });
+      },
+      3600
+    );
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getCompactSampleSize(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { groupBy, offset, limit, keys, ...filters } = req.query;
+
+    const cacheKey = cacheService.generateCacheKey(
+      `sample_compact_${String(groupBy || 'failed_test')}_${String(offset || 0)}_${String(limit || 200)}`,
+      id,
+      { ...filters, keys: keys || undefined }
+    );
+
+    const data = await cacheService.getOrFetch(
+      cacheKey,
+      async () => {
+        return await analysisModel.getCompactSampleSize(id, {
+          groupBy,
+          offset,
+          limit,
+          keys,
+          filters,
+        });
+      },
+      3600
+    );
+
+    res.json({
+      success: true,
+      data,
     });
   } catch (error) {
     next(error);
@@ -376,11 +538,16 @@ module.exports = {
   getIssues,
   getFilterOptions,
   getAnalysis,
+  getAnalysisCompact,
   getTestAnalysis,
   getCrossAnalysis,
+  getCrossAnalysisCompact,
   getFilterStatistics,
+  getFilterStatisticsCompact,
   getSampleSizes,
   getFailureRateMatrix,
+  getCompactFailureRate,
+  getCompactSampleSize,
   exportExcel,
   exportMatrix,
   exportCrossAnalysis,
