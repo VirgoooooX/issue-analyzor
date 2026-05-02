@@ -295,6 +295,8 @@ function parseSampleSizes(sheet) {
   }
 
   const testColumnIndexes = [];
+  let isSingleTestColumn = false;
+
   for (let colNum = 1; colNum <= range.e.c; colNum++) {
     const header = headerValues[colNum];
     if (!header) break;
@@ -305,7 +307,12 @@ function parseSampleSizes(sheet) {
     break;
   }
 
-  const configStartCol = testColumnIndexes.length > 0 ? testColumnIndexes[testColumnIndexes.length - 1] + 1 : 1;
+  // Fallback for legacy format: Single "Test Name" column at col 1
+  if (testColumnIndexes.length === 0 && headerValues[1]) {
+    isSingleTestColumn = true;
+  }
+
+  const configStartCol = isSingleTestColumn ? 2 : (testColumnIndexes.length > 0 ? testColumnIndexes[testColumnIndexes.length - 1] + 1 : 1);
   const configNames = headerValues.slice(configStartCol).filter(Boolean);
 
   for (let rowNum = headerRow + 1; rowNum <= range.e.r; rowNum++) {
@@ -314,14 +321,32 @@ function parseSampleSizes(sheet) {
     const waterfall = String(wfCell.v).trim();
     if (!waterfall) continue;
 
-    const tests = testColumnIndexes
-      .map((colNum, index) => {
-        const cell = sheet[XLSX.utils.encode_cell({ r: rowNum, c: colNum })];
-        const value = cell?.v ? String(cell.v).trim() : '';
-        if (!value || value === '/') return null;
-        return { testId: `Test${index + 1}`, testName: value, index };
-      })
-      .filter(Boolean);
+    let tests = [];
+    if (isSingleTestColumn) {
+      // Parse legacy single column separated by "+"
+      const testNameCell = sheet[XLSX.utils.encode_cell({ r: rowNum, c: 1 })];
+      const testNameStr = testNameCell?.v ? String(testNameCell.v).trim() : '';
+      if (testNameStr && testNameStr !== '/') {
+        tests = testNameStr
+          .split('+')
+          .map((test, index) => ({
+            testId: `Test${index + 1}`,
+            testName: test.trim(),
+            index,
+          }))
+          .filter((test) => test.testName);
+      }
+    } else {
+      // Parse multi-column format
+      tests = testColumnIndexes
+        .map((colNum, index) => {
+          const cell = sheet[XLSX.utils.encode_cell({ r: rowNum, c: colNum })];
+          const value = cell?.v ? String(cell.v).trim() : '';
+          if (!value || value === '/') return null;
+          return { testId: `Test${index + 1}`, testName: value, index };
+        })
+        .filter(Boolean);
+    }
 
     const configSamples = {};
     configNames.forEach((configName, idx) => {
@@ -351,12 +376,8 @@ function detectWFSampleSizeHeaderRow(sheet, range) {
   const maxRow = Math.min(range.e.r, 20);
   for (let rowNum = 0; rowNum <= maxRow; rowNum++) {
     const a = sheet[XLSX.utils.encode_cell({ r: rowNum, c: 0 })]?.v;
-    const b = sheet[XLSX.utils.encode_cell({ r: rowNum, c: 1 })]?.v;
-    const c = sheet[XLSX.utils.encode_cell({ r: rowNum, c: 2 })]?.v;
     const v0 = a ? String(a).trim().toLowerCase() : '';
-    const v1 = b ? String(b).trim().toLowerCase() : '';
-    const v2 = c ? String(c).trim().toLowerCase() : '';
-    if (v0 === 'wf' && v1.startsWith('test') && v2.startsWith('test')) {
+    if (v0 === 'wf' || v0 === 'waterfall' || v0 === 'water fall') {
       return rowNum;
     }
   }
